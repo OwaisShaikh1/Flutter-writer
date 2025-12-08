@@ -4,9 +4,9 @@ class FilterSection extends StatelessWidget {
   final String selected;
   final Function(String) onSelect;
 
-  final filters = ["All", "Poetry", "Drama", "Novel"];
+  final List<String> filters = const ["All", "Poetry", "Drama", "Novel"];
 
-  FilterSection({required this.selected, required this.onSelect});
+  const FilterSection({super.key, required this.selected, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
