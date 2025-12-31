@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../widgets/header.dart';
 import '../widgets/search_bar.dart';
 import '../widgets/filter_section.dart';
@@ -10,9 +13,15 @@ class Dashboard extends StatefulWidget {
 }
 
 class _DashboardState extends State<Dashboard> {
+  // Primary remote URL to fetch the literature JSON from.
+  // Replace this placeholder with your real endpoint.
+  // Use an endpoint that returns a JSON array of literature objects.
+  final String primaryUrl = 'https://jsonplaceholder.typicode.com/posts';
+
   String searchText = "";
   String selectedFilter = "All";
 
+  // Start with dummy data; fetch will attempt to replace this list.
   List<Map<String, dynamic>> literature = [
     {
       "title": "Hamlet",
@@ -46,6 +55,8 @@ class _DashboardState extends State<Dashboard> {
     },
   ];
 
+  bool _loadingRemote = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,22 +77,89 @@ class _DashboardState extends State<Dashboard> {
             ),
             const SizedBox(height: 20),
             Expanded(
-              child: LiteratureList(
-                items: literature.where((item) {
-                  final matchesSearch = item["title"]!
-                      .toLowerCase()
-                      .contains(searchText.toLowerCase());
+              child: _loadingRemote
+                  ? const Center(child: CircularProgressIndicator())
+                  : LiteratureList(
+                      items: literature.where((item) {
+                        final title = (item["title"] ?? '').toString();
+                        final matchesSearch = title
+                            .toLowerCase()
+                            .contains(searchText.toLowerCase());
 
-                  final matchesFilter = selectedFilter == "All" ||
-                      item["type"] == selectedFilter;
+                        final matchesFilter = selectedFilter == "All" ||
+                            (item["type"] ?? '') == selectedFilter;
 
-                  return matchesSearch && matchesFilter;
-                }).toList(),
-              ),
+                        return matchesSearch && matchesFilter;
+                      }).toList(),
+                    ),
             )
           ],
         ),
       ),
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Attempt to fetch remote data; keep dummy if fetch fails.
+    _fetchRemoteLiterature();
+  }
+
+  Future<void> _fetchRemoteLiterature() async {
+    setState(() => _loadingRemote = true);
+    try {
+      final uri = Uri.parse(primaryUrl);
+      final resp = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (resp.statusCode == 200) {
+        final decoded = jsonDecode(resp.body);
+
+        List<Map<String, dynamic>> parsed = [];
+
+        // If the remote API returns the jsonplaceholder "posts" structure
+        // we map each post to the expected literature shape.
+        if (decoded is List) {
+          parsed = decoded.map<Map<String, dynamic>>((e) {
+            if (e is Map && e.containsKey('title') && e.containsKey('body')) {
+              return {
+                'title': e['title']?.toString() ?? 'Untitled',
+                'author': e['userId'] != null ? 'User ${e['userId']}' : 'Unknown',
+                'type': 'Article',
+                'rating': 4.0,
+                'chapters': 1,
+                'comments': e['id'] ?? 0,
+                'image': null,
+                'description': e['body']?.toString() ?? '',
+              };
+            }
+
+            // Fallback: if element is already a map with expected keys, keep it
+            if (e is Map) return Map<String, dynamic>.from(e);
+
+            return {'title': e.toString(), 'author': 'Unknown'};
+          }).toList();
+        } else if (decoded is Map && decoded.containsKey('title') && decoded.containsKey('body')) {
+          // Single-object response -> wrap into a list
+          parsed = [
+            {
+              'title': decoded['title']?.toString() ?? 'Untitled',
+              'author': decoded['userId'] != null ? 'User ${decoded['userId']}' : 'Unknown',
+              'type': 'Article',
+              'rating': 4.0,
+              'chapters': 1,
+              'comments': decoded['id'] ?? 0,
+              'image': null,
+              'description': decoded['body']?.toString() ?? '',
+            }
+          ];
+        }
+
+        if (parsed.isNotEmpty && mounted) setState(() => literature = parsed);
+      }
+    } catch (e) {
+      // Ignore errors and keep dummy data; consider logging or showing user feedback.
+    } finally {
+      if (mounted) setState(() => _loadingRemote = false);
+    }
   }
 }
