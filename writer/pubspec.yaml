@@ -30,11 +30,37 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  
+  # HTTP Client
   http: ^0.13.6
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  
+  # SQLite Database via Drift
+  drift: ^2.14.0              # Type-safe SQLite wrapper
+  sqlite3_flutter_libs: ^0.5.0  # SQLite native libraries for Flutter
+  path_provider: ^2.1.0         # Get app storage directory
+  path: ^1.8.3                  # Path manipulation utilities
+  
+  # State Management
+  provider: ^6.1.0
+  
+  # Shared Preferences for theme persistence
+  shared_preferences: ^2.2.2
+  
+  # Color picker for theme customization
+  flutter_colorpicker: ^1.0.3
+  
+  # Image Caching (for offline images)
+  cached_network_image: ^3.3.0
+  
+  # Secure Storage for JWT tokens
+  flutter_secure_storage: ^9.0.0
+  
+  # Network connectivity check
+  connectivity_plus: ^5.0.0
 
 dev_dependencies:
   flutter_test:
@@ -46,6 +72,10 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  
+  # Code generation for Drift
+  drift_dev: ^2.14.0    # Code generator for Drift
+  build_runner: ^2.4.0  # Build system for code generation
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

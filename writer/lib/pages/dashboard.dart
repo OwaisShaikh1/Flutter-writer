@@ -1,11 +1,17 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import '../providers/literature_provider.dart';
+import '../providers/sync_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/header.dart';
 import '../widgets/search_bar.dart';
 import '../widgets/filter_section.dart';
 import '../widgets/literature_list.dart';
+import '../widgets/offline_indicator.dart';
+import 'login_page.dart';
+import 'profile_page.dart';
+import 'create_literature_page.dart';
+import 'my_works_page.dart';
 
 class Dashboard extends StatefulWidget {
   @override
@@ -13,153 +19,322 @@ class Dashboard extends StatefulWidget {
 }
 
 class _DashboardState extends State<Dashboard> {
-  // Primary remote URL to fetch the literature JSON from.
-  // Replace this placeholder with your real endpoint.
-  // Use an endpoint that returns a JSON array of literature objects.
-  final String primaryUrl = 'https://jsonplaceholder.typicode.com/posts';
-
-  String searchText = "";
-  String selectedFilter = "All";
-
-  // Start with dummy data; fetch will attempt to replace this list.
-  List<Map<String, dynamic>> literature = [
-    {
-      "title": "Hamlet",
-      "author": "Shakespeare",
-      "type": "Drama",
-      "rating": 4.8,
-      "chapters": 5,
-      "comments": 1234,
-      "image": null,
-      "description": "The tragedy of Hamlet, Prince of Denmark, is Shakespeare's longest play. It tells the story of Prince Hamlet seeking revenge for his father's murder."
-    },
-    {
-      "title": "Fire and Ice",
-      "author": "Robert Frost",
-      "type": "Poetry",
-      "rating": 4.5,
-      "chapters": 1,
-      "comments": 567,
-      "image": null,
-      "description": "A profound nine-line poem that contemplates the end of the world through the metaphors of fire and ice, representing desire and hatred."
-    },
-    {
-      "title": "Pride & Prejudice",
-      "author": "Jane Austen",
-      "type": "Novel",
-      "rating": 4.9,
-      "chapters": 61,
-      "comments": 3456,
-      "image": null,
-      "description": "A romantic novel of manners that follows Elizabeth Bennet as she deals with issues of morality, education, and marriage in landed gentry society."
-    },
-  ];
-
-  bool _loadingRemote = false;
-
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Header(),
-            const SizedBox(height: 20),
-            LiteratureSearchBar(
-              onChanged: (value) => setState(() => searchText = value),
-            ),
-            const SizedBox(height: 20),
-            FilterSection(
-              selected: selectedFilter,
-              onSelect: (filter) => setState(() => selectedFilter = filter),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: _loadingRemote
-                  ? const Center(child: CircularProgressIndicator())
-                  : LiteratureList(
-                      items: literature.where((item) {
-                        final title = (item["title"] ?? '').toString();
-                        final matchesSearch = title
-                            .toLowerCase()
-                            .contains(searchText.toLowerCase());
+  void initState() {
+    super.initState();
+    // Trigger initial sync when dashboard loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initialSync();
+    });
+  }
 
-                        final matchesFilter = selectedFilter == "All" ||
-                            (item["type"] ?? '') == selectedFilter;
+  Future<void> _initialSync() async {
+    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+    if (syncProvider.isOnline) {
+      await syncProvider.syncAll();
+    }
+  }
 
-                        return matchesSearch && matchesFilter;
-                      }).toList(),
-                    ),
-            )
-          ],
-        ),
+  Future<void> _handleRefresh() async {
+    final literatureProvider = Provider.of<LiteratureProvider>(context, listen: false);
+    await literatureProvider.syncWithBackend();
+  }
+
+  void _showSyncMessage(BuildContext context, bool success, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
   @override
-  void initState() {
-    super.initState();
-    // Attempt to fetch remote data; keep dummy if fetch fails.
-    _fetchRemoteLiterature();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          // Offline indicator at the top
+          const OfflineIndicator(),
+          
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header with profile and logout
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  
+                  // Search bar
+                  Consumer<LiteratureProvider>(
+                    builder: (context, provider, _) {
+                      return LiteratureSearchBar(
+                        onChanged: (value) => provider.setSearchQuery(value),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Filter section
+                  Consumer<LiteratureProvider>(
+                    builder: (context, provider, _) {
+                      return FilterSection(
+                        selected: provider.selectedFilter,
+                        onSelect: (filter) => provider.setFilter(filter),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Sync status and button
+                  _buildSyncSection(),
+                  const SizedBox(height: 16),
+                  
+                  // Literature list
+                  Expanded(
+                    child: Consumer<LiteratureProvider>(
+                      builder: (context, provider, _) {
+                        if (provider.isLoading) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        
+                        if (provider.items.isEmpty) {
+                          return _buildEmptyState(provider);
+                        }
+                        
+                        return RefreshIndicator(
+                          onRefresh: _handleRefresh,
+                          child: LiteratureList(items: provider.items),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _navigateToCreateLiterature,
+        icon: const Icon(Icons.add),
+        label: const Text('Write'),
+        tooltip: 'Create new literature',
+      ),
+    );
   }
 
-  Future<void> _fetchRemoteLiterature() async {
-    setState(() => _loadingRemote = true);
-    try {
-      final uri = Uri.parse(primaryUrl);
-      final resp = await http.get(uri).timeout(const Duration(seconds: 8));
-      if (resp.statusCode == 200) {
-        final decoded = jsonDecode(resp.body);
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Expanded(child: Header()),
+        Row(
+          children: [
+            // My Works button
+            Consumer<AuthProvider>(
+              builder: (context, auth, _) {
+                if (auth.isAuthenticated) {
+                  return IconButton(
+                    icon: const Icon(Icons.edit_document),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const MyWorksPage()),
+                      );
+                    },
+                    tooltip: 'My Works',
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+            // Profile button
+            IconButton(
+              icon: const Icon(Icons.person),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                );
+              },
+              tooltip: 'Profile',
+            ),
+            // Logout button
+            Consumer<AuthProvider>(
+              builder: (context, auth, _) {
+                if (auth.isAuthenticated) {
+                  return IconButton(
+                    icon: const Icon(Icons.logout),
+                    onPressed: () async {
+                      await auth.logout();
+                      if (context.mounted) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LoginPage(),
+                          ),
+                        );
+                      }
+                    },
+                    tooltip: 'Logout',
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-        List<Map<String, dynamic>> parsed = [];
+  Widget _buildSyncSection() {
+    return Consumer2<LiteratureProvider, SyncProvider>(
+      builder: (context, literature, sync, _) {
+        return Row(
+          children: [
+            // Sync button
+            ElevatedButton.icon(
+              onPressed: literature.isSyncing || sync.isSyncing
+                  ? null
+                  : () async {
+                      final result = await literature.syncWithBackend();
+                      if (context.mounted) {
+                        _showSyncMessage(
+                          context,
+                          result.success,
+                          result.message,
+                        );
+                      }
+                    },
+              icon: literature.isSyncing || sync.isSyncing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.sync, size: 18),
+              label: Text(
+                literature.isSyncing || sync.isSyncing
+                    ? 'Syncing...'
+                    : 'Sync',
+              ),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            
+            // Item count
+            Text(
+              '${literature.filteredCount} of ${literature.totalItems} items',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
+            ),
+            
+            const Spacer(),
+            
+            // Last sync time
+            if (literature.lastSyncTime != null)
+              Text(
+                'Last sync: ${_formatTime(literature.lastSyncTime!)}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 
-        // If the remote API returns the jsonplaceholder "posts" structure
-        // we map each post to the expected literature shape.
-        if (decoded is List) {
-          parsed = decoded.map<Map<String, dynamic>>((e) {
-            if (e is Map && e.containsKey('title') && e.containsKey('body')) {
-              return {
-                'title': e['title']?.toString() ?? 'Untitled',
-                'author': e['userId'] != null ? 'User ${e['userId']}' : 'Unknown',
-                'type': 'Article',
-                'rating': 4.0,
-                'chapters': 1,
-                'comments': e['id'] ?? 0,
-                'image': null,
-                'description': e['body']?.toString() ?? '',
-              };
-            }
+  Widget _buildEmptyState(LiteratureProvider provider) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.menu_book_outlined,
+            size: 64,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All'
+                ? 'No items match your search'
+                : 'No literature items yet',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All'
+                ? 'Try adjusting your filters'
+                : 'Tap sync to fetch items from the server',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                ),
+          ),
+          const SizedBox(height: 24),
+          if (provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All')
+            TextButton.icon(
+              onPressed: () => provider.clearFilters(),
+              icon: const Icon(Icons.clear),
+              label: const Text('Clear filters'),
+            )
+          else
+            ElevatedButton.icon(
+              onPressed: provider.isSyncing
+                  ? null
+                  : () => provider.syncWithBackend(),
+              icon: const Icon(Icons.sync),
+              label: const Text('Sync Now'),
+            ),
+        ],
+      ),
+    );
+  }
 
-            // Fallback: if element is already a map with expected keys, keep it
-            if (e is Map) return Map<String, dynamic>.from(e);
+  void _navigateToCreateLiterature() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const CreateLiteraturePage()),
+    );
+    
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('New literature created!'),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+      );
+    }
+  }
 
-            return {'title': e.toString(), 'author': 'Unknown'};
-          }).toList();
-        } else if (decoded is Map && decoded.containsKey('title') && decoded.containsKey('body')) {
-          // Single-object response -> wrap into a list
-          parsed = [
-            {
-              'title': decoded['title']?.toString() ?? 'Untitled',
-              'author': decoded['userId'] != null ? 'User ${decoded['userId']}' : 'Unknown',
-              'type': 'Article',
-              'rating': 4.0,
-              'chapters': 1,
-              'comments': decoded['id'] ?? 0,
-              'image': null,
-              'description': decoded['body']?.toString() ?? '',
-            }
-          ];
-        }
-
-        if (parsed.isNotEmpty && mounted) setState(() => literature = parsed);
-      }
-    } catch (e) {
-      // Ignore errors and keep dummy data; consider logging or showing user feedback.
-    } finally {
-      if (mounted) setState(() => _loadingRemote = false);
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    
+    if (diff.inMinutes < 1) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else {
+      return '${diff.inDays}d ago';
     }
   }
 }
+
