@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ThemeProvider with ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
-  Color _customColor = const Color(0xFF000000); // Default black
+  Color _customColor = const Color(0xFF000000); // Default Strictly Black
   
   ThemeMode get themeMode => _themeMode;
   Color get customColor => _customColor;

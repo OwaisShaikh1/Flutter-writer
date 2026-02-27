@@ -60,13 +60,13 @@ class _DashboardState extends State<Dashboard> {
           
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header with profile and logout
                   _buildHeader(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   
                   // Search bar
                   Consumer<LiteratureProvider>(
@@ -76,7 +76,7 @@ class _DashboardState extends State<Dashboard> {
                       );
                     },
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   
                   // Filter section
                   Consumer<LiteratureProvider>(
@@ -87,11 +87,11 @@ class _DashboardState extends State<Dashboard> {
                       );
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   
                   // Sync status and button
                   _buildSyncSection(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   
                   // Literature list
                   Expanded(
@@ -120,11 +120,10 @@ class _DashboardState extends State<Dashboard> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: _navigateToCreateLiterature,
-        icon: const Icon(Icons.add),
-        label: const Text('Write'),
-        tooltip: 'Create new literature',
+        tooltip: 'Write new work',
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -141,6 +140,8 @@ class _DashboardState extends State<Dashboard> {
               builder: (context, auth, _) {
                 if (auth.isAuthenticated) {
                   return IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
                     icon: const Icon(Icons.edit_document),
                     onPressed: () {
                       Navigator.push(
@@ -156,6 +157,8 @@ class _DashboardState extends State<Dashboard> {
             ),
             // Profile button
             IconButton(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
               icon: const Icon(Icons.person),
               onPressed: () {
                 Navigator.push(
@@ -170,8 +173,13 @@ class _DashboardState extends State<Dashboard> {
               builder: (context, auth, _) {
                 if (auth.isAuthenticated) {
                   return IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
                     icon: const Icon(Icons.logout),
                     onPressed: () async {
+                      // Reset provider states for user change
+                      await context.read<LiteratureProvider>().resetForUserChange();
+                      await context.read<SyncProvider>().resetForUserChange();
                       await auth.logout();
                       if (context.mounted) {
                         Navigator.pushReplacement(
@@ -198,10 +206,42 @@ class _DashboardState extends State<Dashboard> {
     return Consumer2<LiteratureProvider, SyncProvider>(
       builder: (context, literature, sync, _) {
         return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Sync button
-            ElevatedButton.icon(
-              onPressed: literature.isSyncing || sync.isSyncing
+            // Item count & Online Status
+            Row(
+              children: [
+                Text(
+                  '${literature.totalItems} works',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: sync.isOnline ? Colors.green : Colors.grey,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  sync.isOnline ? 'Online' : 'Offline',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+            
+            // Minimal Sync button
+            InkWell(
+              onTap: literature.isSyncing || sync.isSyncing
                   ? null
                   : () async {
                       final result = await literature.syncWithBackend();
@@ -213,45 +253,31 @@ class _DashboardState extends State<Dashboard> {
                         );
                       }
                     },
-              icon: literature.isSyncing || sync.isSyncing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.sync, size: 18),
-              label: Text(
-                literature.isSyncing || sync.isSyncing
-                    ? 'Syncing...'
-                    : 'Sync',
-              ),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    if (literature.isSyncing || sync.isSyncing)
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      Icon(Icons.sync, size: 14, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      literature.isSyncing || sync.isSyncing ? 'Syncing' : 'Sync',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            
-            // Item count
-            Text(
-              '${literature.filteredCount} of ${literature.totalItems} items',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  ),
-            ),
-            
-            const Spacer(),
-            
-            // Last sync time
-            if (literature.lastSyncTime != null)
-              Text(
-                'Last sync: ${_formatTime(literature.lastSyncTime!)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                    ),
-              ),
           ],
         );
       },
@@ -264,42 +290,45 @@ class _DashboardState extends State<Dashboard> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.menu_book_outlined,
-            size: 64,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+            Icons.auto_stories_outlined,
+            size: 48,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
           ),
           const SizedBox(height: 16),
           Text(
             provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All'
-                ? 'No items match your search'
-                : 'No literature items yet',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                ),
+                ? 'No items found'
+                : 'Your library is empty',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All'
-                ? 'Try adjusting your filters'
-                : 'Tap sync to fetch items from the server',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                ),
+                ? 'Try adjusting your search criteria'
+                : 'Sync to fetch your works from the server',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           if (provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All')
-            TextButton.icon(
+            TextButton(
               onPressed: () => provider.clearFilters(),
-              icon: const Icon(Icons.clear),
-              label: const Text('Clear filters'),
+              child: const Text('Clear all filters'),
             )
           else
-            ElevatedButton.icon(
+            TextButton.icon(
               onPressed: provider.isSyncing
                   ? null
                   : () => provider.syncWithBackend(),
-              icon: const Icon(Icons.sync),
-              label: const Text('Sync Now'),
+              icon: const Icon(Icons.sync, size: 18),
+              label: const Text('Sync now'),
             ),
         ],
       ),

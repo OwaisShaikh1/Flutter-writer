@@ -2,7 +2,8 @@ import 'package:drift/drift.dart';
 
 @DataClassName('ItemEntity')
 class Items extends Table {
-  IntColumn get id => integer().autoIncrement()();
+  IntColumn get id => integer().autoIncrement()(); // Local SQLite ID (never changes)
+  IntColumn get serverId => integer().nullable()(); // Backend-assigned ID (null until synced)
   TextColumn get name => text()();
   TextColumn get author => text()();
   IntColumn get authorId => integer().nullable()(); // User ID who created this

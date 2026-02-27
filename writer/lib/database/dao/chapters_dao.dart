@@ -33,9 +33,20 @@ class ChaptersDao extends DatabaseAccessor<AppDatabase> with _$ChaptersDaoMixin 
     return results.isEmpty ? null : results.first;
   }
 
-  // Insert or update chapter
-  Future<int> upsertChapter(ChaptersCompanion chapter) =>
-      into(chapters).insertOnConflictUpdate(chapter);
+  // Insert or update chapter (handles UNIQUE constraint on itemId + number)
+  Future<int> upsertChapter(ChaptersCompanion chapter) async {
+    // Check if a chapter with this itemId and number already exists
+    if (chapter.itemId.present && chapter.number.present) {
+      final existing = await getChapter(chapter.itemId.value, chapter.number.value);
+      if (existing != null) {
+        // Update existing chapter
+        await (update(chapters)..where((t) => t.id.equals(existing.id))).write(chapter);
+        return existing.id;
+      }
+    }
+    // Insert new chapter
+    return await into(chapters).insert(chapter);
+  }
 
   // Batch insert chapters
   Future<void> insertChapters(List<ChaptersCompanion> chaptersList) async {
@@ -67,8 +78,15 @@ class ChaptersDao extends DatabaseAccessor<AppDatabase> with _$ChaptersDaoMixin 
   Future<void> deleteChaptersByItemId(int itemId) =>
       (delete(chapters)..where((t) => t.itemId.equals(itemId))).go();
 
+  // Delete a specific chapter by itemId and number
+  Future<void> deleteChapter(int itemId, int chapterNumber) =>
+      (delete(chapters)..where((t) => t.itemId.equals(itemId) & t.number.equals(chapterNumber))).go();
+
   // Update itemId for all chapters (used when syncing local item to backend ID)
   Future<void> updateChaptersItemId(int oldItemId, int newItemId) =>
       (update(chapters)..where((t) => t.itemId.equals(oldItemId)))
           .write(ChaptersCompanion(itemId: Value(newItemId)));
+
+  // Clear all chapters (for logout)
+  Future<void> clearAllChapters() => delete(chapters).go();
 }

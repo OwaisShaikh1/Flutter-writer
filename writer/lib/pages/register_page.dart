@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/literature_provider.dart';
 import 'dashboard.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -43,6 +44,8 @@ class _RegisterPageState extends State<RegisterPage> {
     );
 
     if (success && mounted) {
+      // Reload literature provider for the new user
+      await context.read<LiteratureProvider>().reloadForNewUser();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Registration successful!'),

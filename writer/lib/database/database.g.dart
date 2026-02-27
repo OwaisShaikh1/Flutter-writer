@@ -554,6 +554,17 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemEntity> {
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<int> serverId = GeneratedColumn<int>(
+    'server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -742,6 +753,7 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemEntity> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    serverId,
     name,
     author,
     authorId,
@@ -773,6 +785,12 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemEntity> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
     }
     if (data.containsKey('name')) {
       context.handle(
@@ -909,6 +927,10 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemEntity> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_id'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -984,6 +1006,7 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemEntity> {
 
 class ItemEntity extends DataClass implements Insertable<ItemEntity> {
   final int id;
+  final int? serverId;
   final String name;
   final String author;
   final int? authorId;
@@ -1002,6 +1025,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
   final DateTime createdAt;
   const ItemEntity({
     required this.id,
+    this.serverId,
     required this.name,
     required this.author,
     this.authorId,
@@ -1023,6 +1047,9 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<int>(serverId);
+    }
     map['name'] = Variable<String>(name);
     map['author'] = Variable<String>(author);
     if (!nullToAbsent || authorId != null) {
@@ -1053,6 +1080,9 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
   ItemsCompanion toCompanion(bool nullToAbsent) {
     return ItemsCompanion(
       id: Value(id),
+      serverId: serverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverId),
       name: Value(name),
       author: Value(author),
       authorId: authorId == null && nullToAbsent
@@ -1087,6 +1117,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return ItemEntity(
       id: serializer.fromJson<int>(json['id']),
+      serverId: serializer.fromJson<int?>(json['serverId']),
       name: serializer.fromJson<String>(json['name']),
       author: serializer.fromJson<String>(json['author']),
       authorId: serializer.fromJson<int?>(json['authorId']),
@@ -1110,6 +1141,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'serverId': serializer.toJson<int?>(serverId),
       'name': serializer.toJson<String>(name),
       'author': serializer.toJson<String>(author),
       'authorId': serializer.toJson<int?>(authorId),
@@ -1131,6 +1163,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
 
   ItemEntity copyWith({
     int? id,
+    Value<int?> serverId = const Value.absent(),
     String? name,
     String? author,
     Value<int?> authorId = const Value.absent(),
@@ -1149,6 +1182,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
     DateTime? createdAt,
   }) => ItemEntity(
     id: id ?? this.id,
+    serverId: serverId.present ? serverId.value : this.serverId,
     name: name ?? this.name,
     author: author ?? this.author,
     authorId: authorId.present ? authorId.value : this.authorId,
@@ -1171,6 +1205,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
   ItemEntity copyWithCompanion(ItemsCompanion data) {
     return ItemEntity(
       id: data.id.present ? data.id.value : this.id,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
       name: data.name.present ? data.name.value : this.name,
       author: data.author.present ? data.author.value : this.author,
       authorId: data.authorId.present ? data.authorId.value : this.authorId,
@@ -1210,6 +1245,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
   String toString() {
     return (StringBuffer('ItemEntity(')
           ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
           ..write('name: $name, ')
           ..write('author: $author, ')
           ..write('authorId: $authorId, ')
@@ -1233,6 +1269,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
   @override
   int get hashCode => Object.hash(
     id,
+    serverId,
     name,
     author,
     authorId,
@@ -1255,6 +1292,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
       identical(this, other) ||
       (other is ItemEntity &&
           other.id == this.id &&
+          other.serverId == this.serverId &&
           other.name == this.name &&
           other.author == this.author &&
           other.authorId == this.authorId &&
@@ -1275,6 +1313,7 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
 
 class ItemsCompanion extends UpdateCompanion<ItemEntity> {
   final Value<int> id;
+  final Value<int?> serverId;
   final Value<String> name;
   final Value<String> author;
   final Value<int?> authorId;
@@ -1293,6 +1332,7 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
   final Value<DateTime> createdAt;
   const ItemsCompanion({
     this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
     this.name = const Value.absent(),
     this.author = const Value.absent(),
     this.authorId = const Value.absent(),
@@ -1312,6 +1352,7 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
   });
   ItemsCompanion.insert({
     this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
     required String name,
     required String author,
     this.authorId = const Value.absent(),
@@ -1334,6 +1375,7 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
        description = Value(description);
   static Insertable<ItemEntity> custom({
     Expression<int>? id,
+    Expression<int>? serverId,
     Expression<String>? name,
     Expression<String>? author,
     Expression<int>? authorId,
@@ -1353,6 +1395,7 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (serverId != null) 'server_id': serverId,
       if (name != null) 'name': name,
       if (author != null) 'author': author,
       if (authorId != null) 'author_id': authorId,
@@ -1374,6 +1417,7 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
 
   ItemsCompanion copyWith({
     Value<int>? id,
+    Value<int?>? serverId,
     Value<String>? name,
     Value<String>? author,
     Value<int?>? authorId,
@@ -1393,6 +1437,7 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
   }) {
     return ItemsCompanion(
       id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
       name: name ?? this.name,
       author: author ?? this.author,
       authorId: authorId ?? this.authorId,
@@ -1417,6 +1462,9 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<int>(serverId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -1473,6 +1521,7 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
   String toString() {
     return (StringBuffer('ItemsCompanion(')
           ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
           ..write('name: $name, ')
           ..write('author: $author, ')
           ..write('authorId: $authorId, ')
@@ -2493,6 +2542,15 @@ class $SyncLogTable extends SyncLog
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<int> userId = GeneratedColumn<int>(
+    'user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _entityTypeMeta = const VerificationMeta(
     'entityType',
   );
@@ -2586,6 +2644,7 @@ class $SyncLogTable extends SyncLog
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    userId,
     entityType,
     entityId,
     parentId,
@@ -2609,6 +2668,12 @@ class $SyncLogTable extends SyncLog
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
     }
     if (data.containsKey('entity_type')) {
       context.handle(
@@ -2679,6 +2744,10 @@ class $SyncLogTable extends SyncLog
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}user_id'],
+      ),
       entityType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}entity_type'],
@@ -2723,6 +2792,9 @@ class $SyncLogTable extends SyncLog
 class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
   final int id;
 
+  /// The user ID who made this change (for multi-user support)
+  final int? userId;
+
   /// Type of entity: 'item' or 'chapter'
   final String entityType;
 
@@ -2748,6 +2820,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
   final String? lastError;
   const SyncLogEntry({
     required this.id,
+    this.userId,
     required this.entityType,
     required this.entityId,
     this.parentId,
@@ -2761,6 +2834,9 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || userId != null) {
+      map['user_id'] = Variable<int>(userId);
+    }
     map['entity_type'] = Variable<String>(entityType);
     map['entity_id'] = Variable<int>(entityId);
     if (!nullToAbsent || parentId != null) {
@@ -2779,6 +2855,9 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
   SyncLogCompanion toCompanion(bool nullToAbsent) {
     return SyncLogCompanion(
       id: Value(id),
+      userId: userId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(userId),
       entityType: Value(entityType),
       entityId: Value(entityId),
       parentId: parentId == null && nullToAbsent
@@ -2801,6 +2880,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return SyncLogEntry(
       id: serializer.fromJson<int>(json['id']),
+      userId: serializer.fromJson<int?>(json['userId']),
       entityType: serializer.fromJson<String>(json['entityType']),
       entityId: serializer.fromJson<int>(json['entityId']),
       parentId: serializer.fromJson<int?>(json['parentId']),
@@ -2816,6 +2896,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'userId': serializer.toJson<int?>(userId),
       'entityType': serializer.toJson<String>(entityType),
       'entityId': serializer.toJson<int>(entityId),
       'parentId': serializer.toJson<int?>(parentId),
@@ -2829,6 +2910,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
 
   SyncLogEntry copyWith({
     int? id,
+    Value<int?> userId = const Value.absent(),
     String? entityType,
     int? entityId,
     Value<int?> parentId = const Value.absent(),
@@ -2839,6 +2921,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
     Value<String?> lastError = const Value.absent(),
   }) => SyncLogEntry(
     id: id ?? this.id,
+    userId: userId.present ? userId.value : this.userId,
     entityType: entityType ?? this.entityType,
     entityId: entityId ?? this.entityId,
     parentId: parentId.present ? parentId.value : this.parentId,
@@ -2851,6 +2934,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
   SyncLogEntry copyWithCompanion(SyncLogCompanion data) {
     return SyncLogEntry(
       id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
       entityType: data.entityType.present
           ? data.entityType.value
           : this.entityType,
@@ -2868,6 +2952,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
   String toString() {
     return (StringBuffer('SyncLogEntry(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('entityType: $entityType, ')
           ..write('entityId: $entityId, ')
           ..write('parentId: $parentId, ')
@@ -2883,6 +2968,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
   @override
   int get hashCode => Object.hash(
     id,
+    userId,
     entityType,
     entityId,
     parentId,
@@ -2897,6 +2983,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
       identical(this, other) ||
       (other is SyncLogEntry &&
           other.id == this.id &&
+          other.userId == this.userId &&
           other.entityType == this.entityType &&
           other.entityId == this.entityId &&
           other.parentId == this.parentId &&
@@ -2909,6 +2996,7 @@ class SyncLogEntry extends DataClass implements Insertable<SyncLogEntry> {
 
 class SyncLogCompanion extends UpdateCompanion<SyncLogEntry> {
   final Value<int> id;
+  final Value<int?> userId;
   final Value<String> entityType;
   final Value<int> entityId;
   final Value<int?> parentId;
@@ -2919,6 +3007,7 @@ class SyncLogCompanion extends UpdateCompanion<SyncLogEntry> {
   final Value<String?> lastError;
   const SyncLogCompanion({
     this.id = const Value.absent(),
+    this.userId = const Value.absent(),
     this.entityType = const Value.absent(),
     this.entityId = const Value.absent(),
     this.parentId = const Value.absent(),
@@ -2930,6 +3019,7 @@ class SyncLogCompanion extends UpdateCompanion<SyncLogEntry> {
   });
   SyncLogCompanion.insert({
     this.id = const Value.absent(),
+    this.userId = const Value.absent(),
     required String entityType,
     required int entityId,
     this.parentId = const Value.absent(),
@@ -2944,6 +3034,7 @@ class SyncLogCompanion extends UpdateCompanion<SyncLogEntry> {
        payload = Value(payload);
   static Insertable<SyncLogEntry> custom({
     Expression<int>? id,
+    Expression<int>? userId,
     Expression<String>? entityType,
     Expression<int>? entityId,
     Expression<int>? parentId,
@@ -2955,6 +3046,7 @@ class SyncLogCompanion extends UpdateCompanion<SyncLogEntry> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
       if (entityType != null) 'entity_type': entityType,
       if (entityId != null) 'entity_id': entityId,
       if (parentId != null) 'parent_id': parentId,
@@ -2968,6 +3060,7 @@ class SyncLogCompanion extends UpdateCompanion<SyncLogEntry> {
 
   SyncLogCompanion copyWith({
     Value<int>? id,
+    Value<int?>? userId,
     Value<String>? entityType,
     Value<int>? entityId,
     Value<int?>? parentId,
@@ -2979,6 +3072,7 @@ class SyncLogCompanion extends UpdateCompanion<SyncLogEntry> {
   }) {
     return SyncLogCompanion(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       entityType: entityType ?? this.entityType,
       entityId: entityId ?? this.entityId,
       parentId: parentId ?? this.parentId,
@@ -2995,6 +3089,9 @@ class SyncLogCompanion extends UpdateCompanion<SyncLogEntry> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<int>(userId.value);
     }
     if (entityType.present) {
       map['entity_type'] = Variable<String>(entityType.value);
@@ -3027,6 +3124,7 @@ class SyncLogCompanion extends UpdateCompanion<SyncLogEntry> {
   String toString() {
     return (StringBuffer('SyncLogCompanion(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('entityType: $entityType, ')
           ..write('entityId: $entityId, ')
           ..write('parentId: $parentId, ')
@@ -3891,6 +3989,7 @@ typedef $$UsersTableProcessedTableManager =
 typedef $$ItemsTableCreateCompanionBuilder =
     ItemsCompanion Function({
       Value<int> id,
+      Value<int?> serverId,
       required String name,
       required String author,
       Value<int?> authorId,
@@ -3911,6 +4010,7 @@ typedef $$ItemsTableCreateCompanionBuilder =
 typedef $$ItemsTableUpdateCompanionBuilder =
     ItemsCompanion Function({
       Value<int> id,
+      Value<int?> serverId,
       Value<String> name,
       Value<String> author,
       Value<int?> authorId,
@@ -3980,6 +4080,11 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4128,6 +4233,11 @@ class $$ItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -4220,6 +4330,9 @@ class $$ItemsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -4365,6 +4478,7 @@ class $$ItemsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> author = const Value.absent(),
                 Value<int?> authorId = const Value.absent(),
@@ -4383,6 +4497,7 @@ class $$ItemsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
               }) => ItemsCompanion(
                 id: id,
+                serverId: serverId,
                 name: name,
                 author: author,
                 authorId: authorId,
@@ -4403,6 +4518,7 @@ class $$ItemsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<int?> serverId = const Value.absent(),
                 required String name,
                 required String author,
                 Value<int?> authorId = const Value.absent(),
@@ -4421,6 +4537,7 @@ class $$ItemsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
               }) => ItemsCompanion.insert(
                 id: id,
+                serverId: serverId,
                 name: name,
                 author: author,
                 authorId: authorId,
@@ -5254,6 +5371,7 @@ typedef $$UserActivityTableProcessedTableManager =
 typedef $$SyncLogTableCreateCompanionBuilder =
     SyncLogCompanion Function({
       Value<int> id,
+      Value<int?> userId,
       required String entityType,
       required int entityId,
       Value<int?> parentId,
@@ -5266,6 +5384,7 @@ typedef $$SyncLogTableCreateCompanionBuilder =
 typedef $$SyncLogTableUpdateCompanionBuilder =
     SyncLogCompanion Function({
       Value<int> id,
+      Value<int?> userId,
       Value<String> entityType,
       Value<int> entityId,
       Value<int?> parentId,
@@ -5287,6 +5406,11 @@ class $$SyncLogTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get userId => $composableBuilder(
+    column: $table.userId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5345,6 +5469,11 @@ class $$SyncLogTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get entityType => $composableBuilder(
     column: $table.entityType,
     builder: (column) => ColumnOrderings(column),
@@ -5397,6 +5526,9 @@ class $$SyncLogTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
 
   GeneratedColumn<String> get entityType => $composableBuilder(
     column: $table.entityType,
@@ -5457,6 +5589,7 @@ class $$SyncLogTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<int?> userId = const Value.absent(),
                 Value<String> entityType = const Value.absent(),
                 Value<int> entityId = const Value.absent(),
                 Value<int?> parentId = const Value.absent(),
@@ -5467,6 +5600,7 @@ class $$SyncLogTableTableManager
                 Value<String?> lastError = const Value.absent(),
               }) => SyncLogCompanion(
                 id: id,
+                userId: userId,
                 entityType: entityType,
                 entityId: entityId,
                 parentId: parentId,
@@ -5479,6 +5613,7 @@ class $$SyncLogTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<int?> userId = const Value.absent(),
                 required String entityType,
                 required int entityId,
                 Value<int?> parentId = const Value.absent(),
@@ -5489,6 +5624,7 @@ class $$SyncLogTableTableManager
                 Value<String?> lastError = const Value.absent(),
               }) => SyncLogCompanion.insert(
                 id: id,
+                userId: userId,
                 entityType: entityType,
                 entityId: entityId,
                 parentId: parentId,

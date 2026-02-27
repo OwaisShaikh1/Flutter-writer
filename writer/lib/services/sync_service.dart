@@ -86,8 +86,8 @@ class SyncService {
   }
 
   /// Log deletion of a chapter
-  Future<void> logChapterDelete(int chapterId, int itemId) async {
-    await _syncLogDao.logChapterDelete(chapterId, itemId);
+  Future<void> logChapterDelete(int chapterId, int itemId, int chapterNumber) async {
+    await _syncLogDao.logChapterDelete(chapterId, itemId, chapterNumber);
   }
 
   // ==================== AUTO-PUSH (Try immediately, fallback to log) ====================
@@ -102,8 +102,10 @@ class SyncService {
     int? authorId,
     String? imageUrl,
   }) async {
+    print('🔄 SYNC: Starting item create - "$name" (localId: $localId)');
     if (await isOnline()) {
       try {
+        print('📡 SYNC: Online - pushing item to backend...');
         final remoteId = await _api.createItem(
           name: name,
           type: type,
@@ -112,19 +114,20 @@ class SyncService {
         );
         
         if (remoteId != null) {
-          // Update local item with backend ID
-          final item = await _itemsDao.getItemById(localId);
-          if (item != null) {
-            await _itemsDao.changeItemId(localId, remoteId, item);
-            await _chaptersDao.updateChaptersItemId(localId, remoteId);
-            await _itemsDao.deleteItem(localId);
-          }
-          return remoteId;
+          // Store serverId on the local item — local id stays the same forever.
+          // This avoids the duplicate-item bug caused by the old key-swap approach.
+          await _itemsDao.setServerId(localId, remoteId);
+          print('✅ SYNC SUCCESS: Item created on backend (localId: $localId → serverId: $remoteId)');
+          return localId; // Always return local ID (never changes)
+        } else {
+          print('❌ SYNC FAILED: Backend returned null remoteId');
         }
       } catch (e) {
         // Failed - fall through to log
-        print('Auto-push create failed: $e');
+        print('❌ SYNC ERROR: Item create failed - $e');
       }
+    } else {
+      print('📴 SYNC: Offline - queueing for later');
     }
     
     // Offline or failed - log for later
@@ -136,119 +139,235 @@ class SyncService {
       authorId: authorId,
       imageUrl: imageUrl,
     );
+    print('📝 SYNC: Item create queued in sync log (localId: $localId)');
     return localId;
   }
 
   /// Update item: try to push immediately, fallback to sync log
-  Future<bool> autoPushItemUpdate(int itemId, Map<String, dynamic> changes) async {
+  Future<bool> autoPushItemUpdate(int localId, Map<String, dynamic> changes) async {
+    print('🔄 SYNC: Starting item update (localId: $localId) - ${changes.keys.join(", ")}');
     if (await isOnline()) {
       try {
-        final success = await _api.updateItem(
-          itemId: itemId,
-          name: changes['name'] as String? ?? '',
-          type: changes['type'] as String? ?? '',
-          description: changes['description'] as String? ?? '',
-          imageUrl: changes['imageUrl'] as String?,
-        );
-        
-        if (success) {
-          await _itemsDao.markAsSynced(itemId);
-          return true;
+        final serverId = await _itemsDao.getServerId(localId);
+        if (serverId == null) {
+          print('⚠️ SYNC: Item $localId not synced yet, queueing update');
+        } else {
+          print('📡 SYNC: Online - pushing update to backend (serverId: $serverId)...');
+          final success = await _api.updateItem(
+            itemId: serverId,
+            name: changes['name'] as String? ?? '',
+            type: changes['type'] as String? ?? '',
+            description: changes['description'] as String? ?? '',
+            imageUrl: changes['imageUrl'] as String?,
+          );
+          if (success) {
+            await _itemsDao.markAsSynced(localId);
+            print('✅ SYNC SUCCESS: Item updated on backend (serverId: $serverId)');
+            return true;
+          } else {
+            print('❌ SYNC FAILED: Backend returned false');
+          }
         }
       } catch (e) {
-        print('Auto-push update failed: $e');
+        print('❌ SYNC ERROR: Item update failed - $e');
       }
+    } else {
+      print('📴 SYNC: Offline - queueing for later');
     }
     
     // Offline or failed - log for later
-    await logItemUpdate(itemId, changes);
+    await logItemUpdate(localId, changes);
+    print('📝 SYNC: Item update queued in sync log (localId: $localId)');
     return false;
   }
 
   /// Delete item: try to push immediately, fallback to sync log
-  Future<bool> autoPushItemDelete(int itemId) async {
+  Future<bool> autoPushItemDelete(int localId) async {
+    print('🔄 SYNC: Starting item delete (localId: $localId)');
     if (await isOnline()) {
       try {
-        final success = await _api.deleteItem(itemId);
-        if (success) return true;
+        final serverId = await _itemsDao.getServerId(localId);
+        if (serverId == null) {
+          print('⚠️ SYNC: Item $localId not synced, skipping backend delete');
+          return true; // Nothing to delete on backend
+        }
+        print('📡 SYNC: Online - pushing delete to backend (serverId: $serverId)...');
+        final success = await _api.deleteItem(serverId);
+        if (success) {
+          print('✅ SYNC SUCCESS: Item deleted on backend (serverId: $serverId)');
+          return true;
+        } else {
+          print('❌ SYNC FAILED: Backend returned false');
+        }
       } catch (e) {
-        print('Auto-push delete failed: $e');
+        print('❌ SYNC ERROR: Item delete failed - $e');
       }
+    } else {
+      print('📴 SYNC: Offline - queueing for later');
     }
     
     // Offline or failed - log for later
-    await logItemDelete(itemId);
+    await logItemDelete(localId);
+    print('📝 SYNC: Item delete queued in sync log (localId: $localId)');
     return false;
   }
 
   /// Create chapter: try to push immediately, fallback to sync log
-  Future<bool> autoPushChapterCreate(int chapterId, int itemId, {
+  Future<bool> autoPushChapterCreate(int chapterId, int localItemId, {
     required int number,
     required String title,
     required String content,
   }) async {
+    print('🔄 SYNC: Starting chapter create - "$title" (Ch.$number, localItemId: $localItemId)');
     if (await isOnline()) {
       try {
-        final success = await _api.createChapters(itemId, [
-          {'number': number, 'title': title, 'content': content}
-        ]);
-        if (success) return true;
+        final serverItemId = await _itemsDao.getServerId(localItemId);
+        if (serverItemId == null) {
+          print('⚠️ SYNC: Parent item $localItemId not synced yet, queueing chapter');
+        } else {
+          print('📡 SYNC: Online - pushing chapter to backend (serverItemId: $serverItemId)...');
+          final success = await _api.createChapters(serverItemId, [
+            {'number': number, 'title': title, 'content': content}
+          ]);
+          if (success) {
+            print('✅ SYNC SUCCESS: Chapter created on backend (Ch.$number)');
+            return true;
+          } else {
+            print('❌ SYNC FAILED: Backend returned false');
+          }
+        }
       } catch (e) {
-        print('Auto-push chapter create failed: $e');
+        print('❌ SYNC ERROR: Chapter create failed - $e');
       }
+    } else {
+      print('📴 SYNC: Offline - queueing for later');
     }
     
     // Offline or failed - log for later
-    await logChapterCreate(chapterId, itemId,
+    await logChapterCreate(chapterId, localItemId,
       number: number,
       title: title,
       content: content,
     );
+    print('📝 SYNC: Chapter create queued in sync log (Ch.$number)');
     return false;
   }
 
   /// Update chapter: try to push immediately, fallback to sync log
-  Future<bool> autoPushChapterUpdate(int chapterId, int itemId, Map<String, dynamic> changes) async {
+  Future<bool> autoPushChapterUpdate(int chapterId, int localItemId, Map<String, dynamic> changes) async {
+    final chapterNum = changes['number'] ?? '?';
+    print('🔄 SYNC: Starting chapter update (Ch.$chapterNum, localItemId: $localItemId)');
     if (await isOnline()) {
       try {
-        final success = await _api.updateChapter(itemId, changes['number'] as int, changes);
-        if (success) return true;
+        final serverItemId = await _itemsDao.getServerId(localItemId);
+        if (serverItemId == null) {
+          print('⚠️ SYNC: Parent item $localItemId not synced yet, queueing chapter update');
+        } else {
+          print('📡 SYNC: Online - pushing chapter update to backend (serverItemId: $serverItemId)...');
+          final success = await _api.updateChapter(serverItemId, changes['number'] as int, changes);
+          if (success) {
+            print('✅ SYNC SUCCESS: Chapter updated on backend (Ch.$chapterNum)');
+            return true;
+          } else {
+            print('❌ SYNC FAILED: Backend returned false');
+          }
+        }
       } catch (e) {
-        print('Auto-push chapter update failed: $e');
+        print('❌ SYNC ERROR: Chapter update failed - $e');
       }
+    } else {
+      print('📴 SYNC: Offline - queueing for later');
     }
     
     // Offline or failed - log for later
-    await logChapterUpdate(chapterId, itemId, changes);
+    await logChapterUpdate(chapterId, localItemId, changes);
+    print('📝 SYNC: Chapter update queued in sync log (Ch.$chapterNum)');
     return false;
   }
 
   /// Delete chapter: try to push immediately, fallback to sync log
-  Future<bool> autoPushChapterDelete(int chapterId, int itemId, int chapterNumber) async {
+  Future<bool> autoPushChapterDelete(int chapterId, int localItemId, int chapterNumber) async {
+    print('🔄 SYNC: Starting chapter delete (Ch.$chapterNumber, localItemId: $localItemId)');
     if (await isOnline()) {
       try {
-        final success = await _api.deleteChapter(itemId, chapterNumber);
-        if (success) return true;
+        final serverItemId = await _itemsDao.getServerId(localItemId);
+        if (serverItemId == null) {
+          // Item has never been synced so there is nothing on the backend to
+          // delete. Queue anyway in case the item gets synced later.
+          print('⚠️ SYNC: Parent item $localItemId not synced yet, queueing chapter delete');
+        } else {
+          print('📡 SYNC: Online - pushing chapter delete to backend (serverItemId: $serverItemId)...');
+          final success = await _api.deleteChapter(serverItemId, chapterNumber);
+          if (success) {
+            print('✅ SYNC SUCCESS: Chapter deleted on backend (Ch.$chapterNumber)');
+            return true;
+          } else {
+            print('❌ SYNC FAILED: Backend returned false');
+          }
+        }
       } catch (e) {
-        print('Auto-push chapter delete failed: $e');
+        print('❌ SYNC ERROR: Chapter delete failed - $e');
       }
+    } else {
+      print('📴 SYNC: Offline - queueing for later');
     }
     
-    // Offline or failed - log for later
-    await logChapterDelete(chapterId, itemId);
+    // Offline or failed - log for later (include chapter number so sync replay works)
+    await logChapterDelete(chapterId, localItemId, chapterNumber);
+    print('📝 SYNC: Chapter delete queued in sync log (Ch.$chapterNumber)');
     return false;
   }
 
   /// Toggle like: try immediately, no fallback (likes are always online)
-  Future<Map<String, dynamic>?> autoPushToggleLike(int itemId) async {
-    if (!await isOnline()) return null;
-    return await _api.toggleLike(itemId);
+  Future<Map<String, dynamic>?> autoPushToggleLike(int localItemId) async {
+    print('👍 SYNC: Toggle like (localItemId: $localItemId)');
+    if (!await isOnline()) {
+      print('📴 SYNC: Offline - like operation requires connection');
+      return null;
+    }
+    try {
+      final serverId = await _itemsDao.getServerId(localItemId);
+      if (serverId == null) {
+        print('⚠️ SYNC: Item $localItemId not synced, cannot toggle like');
+        return null;
+      }
+      final result = await _api.toggleLike(serverId);
+      if (result != null) {
+        print('✅ SYNC SUCCESS: Like toggled on backend (serverId: $serverId)');
+      } else {
+        print('❌ SYNC FAILED: Toggle like returned null');
+      }
+      return result;
+    } catch (e) {
+      print('❌ SYNC ERROR: Toggle like failed - $e');
+      return null;
+    }
   }
 
   /// Add comment: try immediately, no fallback (comments are always online)
-  Future<dynamic> autoPushAddComment(int itemId, String content) async {
-    if (!await isOnline()) return null;
-    return await _api.addComment(itemId, content);
+  Future<dynamic> autoPushAddComment(int localItemId, String content) async {
+    print('💬 SYNC: Adding comment (localItemId: $localItemId)');
+    if (!await isOnline()) {
+      print('📴 SYNC: Offline - comment operation requires connection');
+      return null;
+    }
+    try {
+      final serverId = await _itemsDao.getServerId(localItemId);
+      if (serverId == null) {
+        print('⚠️ SYNC: Item $localItemId not synced, cannot add comment');
+        return null;
+      }
+      final result = await _api.addComment(serverId, content);
+      if (result != null) {
+        print('✅ SYNC SUCCESS: Comment added on backend (serverId: $serverId)');
+      } else {
+        print('❌ SYNC FAILED: Add comment returned null');
+      }
+      return result;
+    } catch (e) {
+      print('❌ SYNC ERROR: Add comment failed - $e');
+      return null;
+    }
   }
 
   // ==================== SYNC OPERATIONS ====================
@@ -261,16 +380,22 @@ class SyncService {
 
   /// Process all pending sync operations
   Future<SyncResult> processSyncLog() async {
+    print('🔄 PUSH SYNC: Starting to process sync log...');
+    
     if (!await isOnline()) {
+      print('📴 PUSH SYNC: No internet connection');
       return SyncResult(success: false, message: 'No internet connection');
     }
 
     final operations = await _syncLogDao.getPendingOperations();
     
     if (operations.isEmpty) {
+      print('✅ PUSH SYNC: Nothing to sync');
       return SyncResult(success: true, message: 'Nothing to sync', itemCount: 0);
     }
 
+    print('📋 PUSH SYNC: Found ${operations.length} pending operations');
+    
     int successCount = 0;
     int failCount = 0;
     
@@ -280,6 +405,7 @@ class SyncService {
     for (final op in operations) {
       try {
         final payload = jsonDecode(op.payload) as Map<String, dynamic>;
+        print('🔄 PUSH SYNC: Processing ${op.entityType} ${op.operation} (id: ${op.entityId})');
         
         switch (op.entityType) {
           case 'item':
@@ -293,19 +419,26 @@ class SyncService {
         // Success - remove from log
         await _syncLogDao.removeOperation(op.id);
         successCount++;
+        print('✅ PUSH SYNC: Operation completed successfully');
         
       } catch (e) {
+        print('❌ PUSH SYNC: Operation failed - $e');
+        print('   Entity: ${op.entityType}, Operation: ${op.operation}, EntityId: ${op.entityId}');
+        print('   Payload: ${op.payload}');
         // Failed - mark as attempted with error
         await _syncLogDao.markAttempted(op.id, e.toString());
         failCount++;
       }
     }
 
-    return SyncResult(
+    final result = SyncResult(
       success: failCount == 0,
       message: 'Synced $successCount operations, $failCount failed',
       itemCount: successCount,
     );
+    
+    print('📊 PUSH SYNC: Complete - $successCount succeeded, $failCount failed');
+    return result;
   }
 
   Future<void> _processItemOperation(
@@ -322,37 +455,34 @@ class SyncService {
           description: payload['description'] as String? ?? '',
           imageUrl: payload['imageUrl'] as String?,
         );
-        
         if (remoteId != null) {
-          // Store mapping for chapter operations
+          // Store serverId on local item — local id never changes
+          await _itemsDao.setServerId(op.entityId, remoteId);
+          // Track localId→serverId for chapter operations in this batch
           itemIdMapping[op.entityId] = remoteId;
-          
-          // Update local item with backend ID
-          await _itemsDao.changeItemId(op.entityId, remoteId, 
-            await _itemsDao.getItemById(op.entityId) as ItemEntity);
-          await _chaptersDao.updateChaptersItemId(op.entityId, remoteId);
-          await _itemsDao.deleteItem(op.entityId);
+          print('   ✅ Item serverId set: localId=${op.entityId} → serverId=$remoteId');
         } else {
           throw Exception('Backend returned null ID');
         }
         break;
         
       case 'update':
+        final serverId = await _itemsDao.getServerId(op.entityId);
+        if (serverId == null) throw Exception('Item ${op.entityId} not synced, cannot update');
         final success = await _api.updateItem(
-          itemId: op.entityId,
+          itemId: serverId,
           name: payload['name'] as String? ?? '',
           type: payload['type'] as String? ?? '',
           description: payload['description'] as String? ?? '',
           imageUrl: payload['imageUrl'] as String?,
         );
         if (!success) throw Exception('Update failed');
-        
-        // Mark local item as synced
         await _itemsDao.markAsSynced(op.entityId);
         break;
         
       case 'delete':
-        await _api.deleteItem(op.entityId);
+        final serverIdForDelete = await _itemsDao.getServerId(op.entityId);
+        if (serverIdForDelete != null) await _api.deleteItem(serverIdForDelete);
         break;
     }
   }
@@ -362,44 +492,51 @@ class SyncService {
     Map<String, dynamic> payload,
     Map<int, int> itemIdMapping,
   ) async {
-    // Resolve the actual item ID (might have been remapped)
-    final actualItemId = itemIdMapping[op.parentId] ?? op.parentId!;
+    // Resolve the backend server ID for the parent item.
+    // If this batch just created the item, use the itemIdMapping; otherwise look up serverId.
+    int actualServerId;
+    if (itemIdMapping.containsKey(op.parentId)) {
+      actualServerId = itemIdMapping[op.parentId]!;
+    } else {
+      final serverId = await _itemsDao.getServerId(op.parentId!);
+      if (serverId == null) {
+        throw Exception('Parent item ${op.parentId} not yet synced to backend');
+      }
+      actualServerId = serverId;
+    }
+    print('   Chapter operation: ${op.operation}, serverItemId: $actualServerId (localParent: ${op.parentId}), payload: $payload');
     
     switch (op.operation) {
       case 'create':
-        final success = await _api.createChapters(actualItemId, [payload]);
+        print('   Creating chapter on backend (serverItemId: $actualServerId)...');
+        final success = await _api.createChapters(actualServerId, [payload]);
         if (!success) throw Exception('Create chapter failed');
-        
-        // Update chapter count on backend item
-        // (Backend should handle this automatically, but we update locally)
-        final item = await _itemsDao.getItemById(actualItemId);
-        if (item != null) {
-          await _itemsDao.updateItem(actualItemId, ItemsCompanion(
-            chaptersCount: Value(item.chaptersCount + 1),
-          ));
-        }
+        print('   Chapter created successfully');
         break;
         
       case 'update':
-        final success = await _api.updateChapter(
-          actualItemId,
+        print('   Updating chapter on backend (serverItemId: $actualServerId)...');
+        final updateSuccess = await _api.updateChapter(
+          actualServerId,
           payload['number'] as int,
           payload,
         );
-        if (!success) throw Exception('Update chapter failed');
+        if (!updateSuccess) throw Exception('Update chapter failed');
+        print('   Chapter updated successfully');
         break;
         
       case 'delete':
-        final success = await _api.deleteChapter(actualItemId, payload['number'] as int);
-        if (!success) throw Exception('Delete chapter failed');
-        
-        // Update chapter count locally
-        final item = await _itemsDao.getItemById(actualItemId);
-        if (item != null && item.chaptersCount > 0) {
-          await _itemsDao.updateItem(actualItemId, ItemsCompanion(
-            chaptersCount: Value(item.chaptersCount - 1),
-          ));
+        print('   Deleting chapter on backend (serverItemId: $actualServerId)...');
+        // Guard against old log entries that were saved with an empty payload
+        // before the chapter-number fix was introduced.
+        final chapterNumRaw = payload['number'];
+        if (chapterNumRaw == null) {
+          print('   ⚠️ Chapter delete log entry has no number in payload – skipping (stale entry)');
+          break;
         }
+        final deleteSuccess = await _api.deleteChapter(actualServerId, chapterNumRaw as int);
+        if (!deleteSuccess) throw Exception('Delete chapter failed');
+        print('   Chapter deleted successfully');
         break;
     }
   }
@@ -407,6 +544,7 @@ class SyncService {
   // ==================== PULL FROM BACKEND ====================
 
   /// Pull all items from backend to local DB
+  /// Deletes items that were synced but no longer exist on server
   Future<SyncResult> pullItems() async {
     try {
       if (!await isOnline()) {
@@ -414,31 +552,81 @@ class SyncService {
       }
 
       final items = await _api.fetchItems();
+      int deleted = 0;
 
-      final companions = items.map((item) {
-        return ItemsCompanion(
-          id: Value(item.id),
-          name: Value(item.title),
-          author: Value(item.author),
-          authorId: item.authorId != null ? Value(item.authorId!) : const Value.absent(),
-          type: Value(item.type),
-          rating: Value(item.rating),
-          chaptersCount: Value(item.chapters),
-          commentsCount: Value(item.comments),
-          likesCount: Value(item.likes),
-          isLikedByUser: Value(item.isLikedByUser),
-          imageUrl: Value(item.imageUrl),
-          description: Value(item.description),
-          isSynced: const Value(true),
-          lastSyncedAt: Value(DateTime.now()),
-        );
-      }).toList();
+      // Build a set of all server item IDs for quick lookup
+      final serverItemIds = items.map((item) => item.id).toSet();
 
-      await _itemsDao.insertItems(companions);
+      // Smart deduplication: if we already have this backend item as a locally-created
+      // and synced item (serverId matches), update it in place instead of creating a duplicate.
+      for (final item in items) {
+        final existingByServerId = await _itemsDao.getItemByServerId(item.id);
+        if (existingByServerId != null) {
+          // Locally-created item already synced — update its data from backend
+          await _itemsDao.updateItem(existingByServerId.id, ItemsCompanion(
+            name: Value(item.title),
+            author: Value(item.author),
+            authorId: item.authorId != null ? Value(item.authorId!) : const Value.absent(),
+            type: Value(item.type),
+            rating: Value(item.rating),
+            chaptersCount: Value(item.chapters),
+            commentsCount: Value(item.comments),
+            likesCount: Value(item.likes),
+            isLikedByUser: Value(item.isLikedByUser),
+            imageUrl: Value(item.imageUrl),
+            description: Value(item.description),
+            serverId: Value(item.id),
+            isSynced: const Value(true),
+            lastSyncedAt: Value(DateTime.now()),
+          ));
+        } else {
+          // Backend-originated item — store with backend ID as local ID
+          await _itemsDao.upsertItem(ItemsCompanion(
+            id: Value(item.id),
+            serverId: Value(item.id), // For pulled items localId == serverId
+            name: Value(item.title),
+            author: Value(item.author),
+            authorId: item.authorId != null ? Value(item.authorId!) : const Value.absent(),
+            type: Value(item.type),
+            rating: Value(item.rating),
+            chaptersCount: Value(item.chapters),
+            commentsCount: Value(item.comments),
+            likesCount: Value(item.likes),
+            isLikedByUser: Value(item.isLikedByUser),
+            imageUrl: Value(item.imageUrl),
+            description: Value(item.description),
+            isSynced: const Value(true),
+            lastSyncedAt: Value(DateTime.now()),
+          ));
+        }
+      }
+
+      // 🔄 DELETION SYNC: Remove items that were synced but no longer exist on server
+      // Get all locally synced items (those with server_id)
+      final localSyncedItems = await _itemsDao.getSyncedItems();
+      
+      for (final localItem in localSyncedItems) {
+        // If this item has a server_id but that ID is not in the server list,
+        // it was deleted on another device
+        if (localItem.serverId != null && !serverItemIds.contains(localItem.serverId)) {
+          print('🗑️ SYNC: Deleting item "${localItem.name}" (server_id: ${localItem.serverId}) - no longer on server');
+          
+          // Delete chapters first (foreign key cascade should handle this, but be explicit)
+          await _chaptersDao.deleteChaptersByItemId(localItem.id);
+          
+          // Delete the item
+          await _itemsDao.deleteItem(localItem.id);
+          deleted++;
+        }
+      }
+
+      final message = deleted > 0 
+          ? 'Pulled ${items.length} items, deleted $deleted'
+          : 'Pulled ${items.length} items';
 
       return SyncResult(
         success: true,
-        message: 'Pulled ${items.length} items',
+        message: message,
         itemCount: items.length,
       );
     } catch (e) {
@@ -453,7 +641,10 @@ class SyncService {
         return SyncResult(success: false, message: 'No internet connection');
       }
 
-      final chapters = await _api.fetchChapters(itemId);
+      // Resolve to backend server ID so the API call uses the correct ID.
+      // For backend-originated items localId == serverId, so the fallback is safe.
+      final serverItemId = await _itemsDao.getServerId(itemId) ?? itemId;
+      final chapters = await _api.fetchChapters(serverItemId);
       
       if (chapters.isEmpty) {
         return SyncResult(success: true, message: 'No chapters', itemCount: 0);
@@ -461,7 +652,7 @@ class SyncService {
 
       final companions = chapters.map((chapter) {
         return ChaptersCompanion(
-          itemId: Value(itemId),
+          itemId: Value(itemId), // always store under the local ID
           number: Value(chapter.number),
           title: Value(chapter.title),
           content: Value(chapter.content),
@@ -494,11 +685,14 @@ class SyncService {
     // 2. Pull remote items
     final pullResult = await pullItems();
 
-    // 3. Pull chapters for all items
+    // 3. Pull chapters only for backend-originated items (where localId == serverId).
+    // Locally-created items already have their chapters stored locally.
     if (pullResult.success) {
       final items = await _itemsDao.getAllItems();
       for (final item in items) {
-        await pullChapters(item.id);
+        if (item.serverId != null && item.id == item.serverId) {
+          await pullChapters(item.id); // item.id is the server ID for these items
+        }
       }
     }
 
@@ -517,11 +711,15 @@ class SyncService {
   Future<bool> downloadChapter(int itemId, int chapterNumber) async {
     try {
       if (!await isOnline()) return false;
-      final chapter = await _api.fetchChapter(itemId, chapterNumber);
+      // For locally-created items localId != serverId. Always resolve to the
+      // backend ID before hitting the API; fall back to itemId for backend-
+      // originated items where localId == serverId.
+      final serverItemId = await _itemsDao.getServerId(itemId) ?? itemId;
+      final chapter = await _api.fetchChapter(serverItemId, chapterNumber);
       if (chapter == null) return false;
 
       await _chaptersDao.upsertChapter(ChaptersCompanion(
-        itemId: Value(itemId),
+        itemId: Value(itemId), // always store under the local ID
         number: Value(chapterNumber),
         title: Value(chapter.title),
         content: Value(chapter.content),

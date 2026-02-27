@@ -94,36 +94,44 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: Text(widget.item.title),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        title: Text(
+          widget.item.title,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal),
+        ),
+        centerTitle: true,
         actions: [
           // Chapter selector
-          PopupMenuButton<int>(
-            icon: const Icon(Icons.menu_book),
-            tooltip: 'Go to chapter',
-            onSelected: _goToChapter,
-            itemBuilder: (context) {
-              return List.generate(
-                widget.item.chapters,
-                (index) => PopupMenuItem(
-                  value: index + 1,
-                  child: Text('Chapter ${index + 1}'),
+          IconButton(
+            icon: const Icon(Icons.list_alt_rounded, size: 20),
+            tooltip: 'Chapters',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
+                builder: (context) => _buildChapterPicker(),
               );
             },
           ),
-          // Download all chapters
+          // Download icon
           Consumer<SyncProvider>(
             builder: (context, syncProvider, _) {
               return IconButton(
                 icon: syncProvider.isSyncing
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.download),
-                tooltip: 'Download all chapters',
+                    : const Icon(Icons.download_rounded, size: 20),
+                tooltip: 'Download',
                 onPressed: syncProvider.isSyncing
                     ? null
                     : () async {
@@ -132,7 +140,10 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(result.message),
-                              backgroundColor: result.success ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
+                              behavior: SnackBarBehavior.floating,
+                              backgroundColor: result.success 
+                                  ? Theme.of(context).colorScheme.primary 
+                                  : Theme.of(context).colorScheme.error,
                             ),
                           );
                           if (result.success) {
@@ -150,44 +161,110 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
     );
   }
 
+  Widget _buildChapterPicker() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Select Chapter',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: widget.item.chapters,
+              itemBuilder: (context, index) {
+                final chapterNum = index + 1;
+                final isCurrent = chapterNum == _currentChapter;
+                return ListTile(
+                  title: Text(
+                    'Chapter $chapterNum',
+                    style: TextStyle(
+                      fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                      color: isCurrent ? Theme.of(context).colorScheme.primary : null,
+                    ),
+                  ),
+                  trailing: isCurrent ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _goToChapter(chapterNum);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Fetching content...',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
     }
 
     if (_error != null) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(40),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.cloud_off,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                Icons.error_outline_rounded,
+                size: 40,
+                color: Theme.of(context).colorScheme.error.withOpacity(0.5),
               ),
               const SizedBox(height: 16),
               Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                    ),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  fontSize: 14,
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               Consumer<SyncProvider>(
                 builder: (context, syncProvider, _) {
                   if (!syncProvider.isOnline) {
                     return Text(
-                      'You are currently offline',
-                      style: TextStyle(color: Theme.of(context).colorScheme.tertiary),
+                      'CONNECT TO DOWNLOAD',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     );
                   }
-                  return ElevatedButton.icon(
+                  return TextButton.icon(
                     onPressed: _loadChapter,
-                    icon: const Icon(Icons.download),
-                    label: const Text('Download Chapter'),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('RETRY'),
                   );
                 },
               ),
@@ -198,64 +275,64 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
     }
 
     if (_chapter == null) {
-      return const Center(child: Text('No content available'));
+      return const Center(
+        child: Text(
+          'No content found',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.only(left: 24, right: 24, top: 8, bottom: 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Chapter title
           Text(
             _chapter!.title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           
-          // Chapter info
+          // Chapter info - minimal
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Chapter $_currentChapter of ${widget.item.chapters}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    fontSize: 12,
-                  ),
+              Text(
+                'CHAPTER $_currentChapter OF ${widget.item.chapters}',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                 ),
               ),
               if (_chapter!.isDownloaded) ...[
-                const SizedBox(width: 8),
-                Icon(Icons.offline_pin, size: 16, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 4),
-                Text(
-                  'Available offline',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontSize: 12,
-                  ),
-                ),
+                const SizedBox(width: 12),
+                Icon(Icons.check_circle_outline, 
+                    size: 14, 
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
               ],
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 48),
           
           // Chapter content
           SelectableText(
             _chapter!.content,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  height: 1.8,
-                  fontSize: 16,
-                ),
+            style: TextStyle(
+              height: 1.8,
+              fontSize: 17,
+              letterSpacing: 0.2,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+            ),
           ),
+          const SizedBox(height: 100), // Extra space at bottom
         ],
       ),
     );
@@ -263,16 +340,15 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
 
   Widget _buildNavigationBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, -2),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+            width: 1,
           ),
-        ],
+        ),
       ),
       child: SafeArea(
         top: false,
@@ -280,28 +356,65 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             // Previous button
-            ElevatedButton.icon(
-              onPressed: _currentChapter > 1
-                  ? () => _goToChapter(_currentChapter - 1)
-                  : null,
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('Previous'),
+            _buildNavButton(
+              onTap: _currentChapter > 1 ? () => _goToChapter(_currentChapter - 1) : null,
+              label: 'PREVIOUS',
+              icon: Icons.chevron_left_rounded,
+              isLeft: true,
             ),
             
-            // Chapter indicator
+            // Progress
             Text(
               '$_currentChapter / ${widget.item.chapters}',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+              ),
             ),
             
             // Next button
-            ElevatedButton.icon(
-              onPressed: _currentChapter < widget.item.chapters
-                  ? () => _goToChapter(_currentChapter + 1)
-                  : null,
-              icon: const Icon(Icons.arrow_forward),
-              label: const Text('Next'),
+            _buildNavButton(
+              onTap: _currentChapter < widget.item.chapters ? () => _goToChapter(_currentChapter + 1) : null,
+              label: 'NEXT',
+              icon: Icons.chevron_right_rounded,
+              isLeft: false,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavButton({
+    required VoidCallback? onTap,
+    required String label,
+    required IconData icon,
+    required bool isLeft,
+  }) {
+    final color = onTap == null 
+        ? Theme.of(context).colorScheme.onSurface.withOpacity(0.1)
+        : Theme.of(context).colorScheme.primary;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isLeft) Icon(icon, color: color, size: 20),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+                color: color,
+              ),
+            ),
+            if (!isLeft) Icon(icon, color: color, size: 20),
           ],
         ),
       ),

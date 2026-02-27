@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart';
 import '../database/database.dart';
 import '../database/dao/items_dao.dart';
 import '../database/dao/chapters_dao.dart';
-import '../services/sync_service.dart';
+import '../services/sync_service_v2.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
 import '../models/literature_item.dart';
@@ -14,7 +15,7 @@ class LiteratureProvider with ChangeNotifier {
   final AppDatabase _db;
   late final ItemsDao _itemsDao;
   late final ChaptersDao _chaptersDao;
-  late final SyncService _syncService;
+  late final SyncServiceV2 _syncService;
   final StorageService _storageService = StorageService();
   final ApiService _apiService = ApiService();
 
@@ -27,11 +28,12 @@ class LiteratureProvider with ChangeNotifier {
   String? _errorMessage;
   DateTime? _lastSyncTime;
   int? _currentUserId;
+  StreamSubscription<List<dynamic>>? _myWorksSubscription;
 
   LiteratureProvider(this._db) {
     _itemsDao = ItemsDao(_db);
     _chaptersDao = ChaptersDao(_db);
-    _syncService = SyncService(_db);
+    _syncService = SyncServiceV2(_db);
     _init();
     _loadCurrentUserId();
   }
@@ -49,7 +51,10 @@ class LiteratureProvider with ChangeNotifier {
   void _watchMyWorks() {
     if (_currentUserId == null) return;
     
-    _itemsDao.watchItemsByAuthorId(_currentUserId!).listen(
+    // Cancel previous subscription if exists
+    _myWorksSubscription?.cancel();
+    
+    _myWorksSubscription = _itemsDao.watchItemsByAuthorId(_currentUserId!).listen(
       (entities) {
         _myWorks = entities.map((e) => LiteratureItem.fromEntity(e)).toList();
         notifyListeners();
@@ -185,7 +190,10 @@ class LiteratureProvider with ChangeNotifier {
   /// Refresh item data from API (used after returning from detail page)
   Future<void> refreshItemData(int id) async {
     try {
-      final item = await _apiService.fetchItem(id);
+      // Use serverId for the API call — items may have a different local vs server ID
+      final serverId = await _itemsDao.getServerId(id);
+      if (serverId == null) return; // Not synced yet, nothing to refresh
+      final item = await _apiService.fetchItem(serverId);
       if (item != null) {
         await _itemsDao.updateItem(id, ItemsCompanion(
           likesCount: Value(item.likes),
@@ -264,8 +272,25 @@ class LiteratureProvider with ChangeNotifier {
         isSynced: const Value(false),
       ));
 
-      // Auto-push item: try server immediately, fallback to sync log
-      final itemId = await _syncService.autoPushItemCreate(localItemId,
+      print('DEBUG: Created local item with localItemId: $localItemId');
+
+      // Create all chapters locally FIRST (with localItemId)
+      for (final draft in chapters) {
+        await _chaptersDao.upsertChapter(ChaptersCompanion(
+          itemId: Value(localItemId),
+          number: Value(draft.number),
+          title: Value(draft.title),
+          content: Value(draft.content),
+          isDownloaded: const Value(true),
+          createdAt: Value(DateTime.now()),
+        ));
+      }
+
+      print('DEBUG: Created ${chapters.length} chapters with localItemId');
+
+      // Now try to push item to backend and set its serverId.
+      // autoPushItemCreate always returns localItemId — localId never changes.
+      await _syncService.autoPushItemCreate(localItemId,
         name: title,
         type: type,
         description: description,
@@ -274,31 +299,26 @@ class LiteratureProvider with ChangeNotifier {
         imageUrl: imageUrl,
       );
 
-      // Create all chapters locally and auto-push
-      for (final draft in chapters) {
-        final chapterId = await _chaptersDao.upsertChapter(ChaptersCompanion(
-          itemId: Value(itemId),
-          number: Value(draft.number),
-          title: Value(draft.title),
-          content: Value(draft.content),
-          isDownloaded: const Value(true),
-          createdAt: Value(DateTime.now()),
-        ));
-        
-        // Auto-push chapter: try server immediately, fallback to sync log
-        await _syncService.autoPushChapterCreate(chapterId, itemId,
-          number: draft.number,
-          title: draft.title,
-          content: draft.content,
-        );
+      // Push all chapters to backend in background.
+      // autoPushChapterCreate will resolve the item's serverId internally.
+      final chaptersList = await _chaptersDao.getChaptersByItemId(localItemId);
+      for (final chapter in chaptersList) {
+        _syncService.autoPushChapterCreate(chapter.id, localItemId,
+          number: chapter.number,
+          title: chapter.title,
+          content: chapter.content,
+        ).catchError((e) {
+          print('⚠️ BACKGROUND SYNC: Chapter create failed (will retry later) - $e');
+          return false;
+        });
       }
 
-      print('DEBUG createLiterature: Created item with id=$itemId, authorId=$_currentUserId');
+      print('DEBUG createLiterature: Created item with localId=$localItemId, authorId=$_currentUserId');
 
       // Refresh my works list immediately
       await refreshMyWorks();
 
-      return itemId;
+      return localItemId;
     } catch (e) {
       _errorMessage = 'Failed to create literature: $e';
       notifyListeners();
@@ -334,62 +354,67 @@ class LiteratureProvider with ChangeNotifier {
         isSynced: const Value(false),
       ));
 
-      // Auto-push item update: try server immediately, fallback to sync log
-      await _syncService.autoPushItemUpdate(id, {
+      // Auto-push item update in background (non-blocking)
+      _syncService.autoPushItemUpdate(id, {
         'name': title,
         'type': type,
         'description': description,
         'imageUrl': imageUrl,
+      }).catchError((e) {
+        print('⚠️ BACKGROUND SYNC: Item update failed (will retry later) - $e');
+        return false;
       });
 
-      // Handle chapters: create new, update existing, delete removed
-      for (final draft in chapters) {
-        final existing = existingChapters.where((c) => c.number == draft.number).firstOrNull;
-        
-        final chapterId = await _chaptersDao.upsertChapter(ChaptersCompanion(
-          itemId: Value(id),
-          number: Value(draft.number),
-          title: Value(draft.title),
-          content: Value(draft.content),
-          isDownloaded: const Value(true),
-        ));
-
-        if (existing == null) {
-          // New chapter - auto-push
-          await _syncService.autoPushChapterCreate(chapterId, id,
-            number: draft.number,
-            title: draft.title,
-            content: draft.content,
-          );
-        } else if (existing.title != draft.title || existing.content != draft.content) {
-          // Updated chapter - auto-push
-          await _syncService.autoPushChapterUpdate(existing.id, id, {
-            'number': draft.number,
-            'title': draft.title,
-            'content': draft.content,
+      // Delete removed chapters first
+      for (final existing in existingChapters) {
+        if (!newNumbers.contains(existing.number)) {
+          // Delete from local DB
+          await _chaptersDao.deleteChapter(id, existing.number);
+          // Sync deletion in background
+          _syncService.autoPushChapterDelete(existing.id, id, existing.number)
+              .catchError((e) {
+            print('⚠️ BACKGROUND SYNC: Chapter delete failed (will retry later) - $e');
+            return false;
           });
         }
       }
 
-      // Delete removed chapters
-      for (final existing in existingChapters) {
-        if (!newNumbers.contains(existing.number)) {
-          await _chaptersDao.deleteChaptersByItemId(id); // Will be recreated
-          await _syncService.autoPushChapterDelete(existing.id, id, existing.number);
-        }
-      }
-
-      // Recreate remaining chapters (simpler than individual deletes)
-      await _chaptersDao.deleteChaptersByItemId(id);
+      // Update or create chapters locally
       for (final draft in chapters) {
-        await _chaptersDao.upsertChapter(ChaptersCompanion(
+        final existing = existingChapters.where((c) => c.number == draft.number).firstOrNull;
+        
+        // Save to local DB first (this now handles the UNIQUE constraint properly)
+        final chapterId = await _chaptersDao.upsertChapter(ChaptersCompanion(
+          id: existing != null ? Value(existing.id) : const Value.absent(),
           itemId: Value(id),
           number: Value(draft.number),
           title: Value(draft.title),
           content: Value(draft.content),
           isDownloaded: const Value(true),
-          createdAt: Value(DateTime.now()),
         ));
+
+        // Sync in background (non-blocking)
+        if (existing == null) {
+          // New chapter - push in background
+          _syncService.autoPushChapterCreate(chapterId, id,
+            number: draft.number,
+            title: draft.title,
+            content: draft.content,
+          ).catchError((e) {
+            print('⚠️ BACKGROUND SYNC: Chapter create failed (will retry later) - $e');
+            return false;
+          });
+        } else if (existing.title != draft.title || existing.content != draft.content) {
+          // Updated chapter - push in background
+          _syncService.autoPushChapterUpdate(existing.id, id, {
+            'number': draft.number,
+            'title': draft.title,
+            'content': draft.content,
+          }).catchError((e) {
+            print('⚠️ BACKGROUND SYNC: Chapter update failed (will retry later) - $e');
+            return false;
+          });
+        }
       }
     } catch (e) {
       _errorMessage = 'Failed to update literature: $e';
@@ -455,6 +480,31 @@ class LiteratureProvider with ChangeNotifier {
     }
     
     _myWorks = entities.map((e) => LiteratureItem.fromEntity(e)).toList();
+    notifyListeners();
+  }
+
+  /// Reset provider state when user changes (logout/login)
+  /// Clears user-specific data but keeps cached items for offline reading
+  Future<void> resetForUserChange() async {
+    // Cancel the my works subscription
+    _myWorksSubscription?.cancel();
+    _myWorksSubscription = null;
+    
+    // Clear user-specific state
+    _myWorks = [];
+    _currentUserId = null;
+    _lastSyncTime = null;
+    _errorMessage = null;
+    
+    notifyListeners();
+  }
+
+  /// Reload user data after login
+  Future<void> reloadForNewUser() async {
+    _currentUserId = await _storageService.getUserId();
+    if (_currentUserId != null) {
+      _watchMyWorks();
+    }
     notifyListeners();
   }
 

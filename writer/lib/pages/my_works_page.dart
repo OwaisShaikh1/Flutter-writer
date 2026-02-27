@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/literature_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/literature_item.dart';
+import '../theme/app_theme.dart';
 import 'edit_literature_page.dart';
 import 'create_literature_page.dart';
 
@@ -82,12 +83,33 @@ class _MyWorksPageState extends State<MyWorksPage> {
     );
   }
 
+  Color _getTypeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'drama': return AppColors.drama;
+      case 'poetry': return AppColors.poetry;
+      case 'novel': return AppColors.novel;
+      case 'article': return AppColors.article;
+      default: return AppColors.other;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: const Text('My Works'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        title: const Text(
+          'MY MANUSCRIPTS',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+        ),
+        centerTitle: true,
       ),
       body: Consumer2<LiteratureProvider, AuthProvider>(
         builder: (context, literatureProvider, authProvider, _) {
@@ -103,12 +125,17 @@ class _MyWorksPageState extends State<MyWorksPage> {
 
           return RefreshIndicator(
             onRefresh: () => literatureProvider.refreshMyWorks(),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               itemCount: myWorks.length,
+              separatorBuilder: (context, index) => Divider(
+                height: 48,
+                thickness: 1,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+              ),
               itemBuilder: (context, index) {
                 final item = myWorks[index];
-                return _buildWorkCard(item);
+                return _buildWorkItem(item);
               },
             ),
           );
@@ -117,10 +144,12 @@ class _MyWorksPageState extends State<MyWorksPage> {
       floatingActionButton: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           if (!auth.isAuthenticated) return const SizedBox.shrink();
-          return FloatingActionButton.extended(
+          return FloatingActionButton(
+            elevation: 2,
             onPressed: _navigateToCreateLiterature,
-            icon: const Icon(Icons.add),
-            label: const Text('New Work'),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            child: const Icon(Icons.add),
           );
         },
       ),
@@ -130,30 +159,31 @@ class _MyWorksPageState extends State<MyWorksPage> {
   Widget _buildNotLoggedIn() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.lock_outline,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+              Icons.lock_person_outlined,
+              size: 48,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Login Required',
+            const SizedBox(height: 24),
+            const Text(
+              'MEMBERS ONLY',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
+                letterSpacing: 1.2,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
-              'Please login to view and manage your works',
+              'Please login to access your personal literary archives.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
               ),
             ),
           ],
@@ -165,57 +195,42 @@ class _MyWorksPageState extends State<MyWorksPage> {
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.create_outlined,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No Works Yet',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Start writing your first piece of literature!',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
+              Icons.draw_outlined,
+              size: 48,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.15),
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _navigateToCreateLiterature,
-              icon: const Icon(Icons.add),
-              label: const Text('Create New Work'),
+            const Text(
+              'THE CANVAS IS BLANK',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
             ),
-            const SizedBox(height: 16),
-            // Button to claim orphan items (items created before account system)
+            const SizedBox(height: 12),
+            Text(
+              'Begin your first masterpiece today.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+              ),
+            ),
+            const SizedBox(height: 40),
             TextButton.icon(
-              onPressed: () async {
-                final provider = Provider.of<LiteratureProvider>(context, listen: false);
-                final claimed = await provider.claimOrphanItems();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(claimed > 0 
-                        ? 'Claimed $claimed existing items!' 
-                        : 'No orphan items to claim'),
-                      backgroundColor: claimed > 0 ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outline,
-                    ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.download),
-              label: const Text('Claim Existing Items'),
+              onPressed: _navigateToCreateLiterature,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('CREATE NEW WORK'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              ),
             ),
           ],
         ),
@@ -223,138 +238,116 @@ class _MyWorksPageState extends State<MyWorksPage> {
     );
   }
 
-  Widget _buildWorkCard(LiteratureItem item) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: () => _navigateToEditLiterature(item),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+  Widget _buildWorkItem(LiteratureItem item) {
+    return InkWell(
+      onTap: () => _navigateToEditLiterature(item),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Icon based on type
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.2,
+                      ),
                     ),
-                    child: Icon(
-                      _getTypeIcon(item.type),
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 4),
+                    Row(
                       children: [
                         Text(
-                          item.title,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.type,
+                          item.type.toUpperCase(),
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.secondary,
-                            fontSize: 14,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  // Sync status indicator
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: item.isSynced
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : Theme.of(context).colorScheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 3,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Icon(
-                          item.isSynced ? Icons.cloud_done : Icons.cloud_off,
-                          size: 14,
-                          color: item.isSynced ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.tertiary,
+                          item.isSynced ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+                          size: 12,
+                          color: item.isSynced ? Colors.blue.withOpacity(0.7) : Colors.grey.withOpacity(0.5),
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          item.isSynced ? 'Synced' : 'Local',
+                          item.isSynced ? 'SYNCED' : 'LOCAL',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: item.isSynced ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.tertiary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: item.isSynced ? Colors.blue.withOpacity(0.7) : Colors.grey.withOpacity(0.5),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                item.description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _buildStat(Icons.book, '${item.chapters} chapters'),
-                  const SizedBox(width: 16),
-                  _buildStat(Icons.star, item.rating.toStringAsFixed(1)),
-                  const Spacer(),
-                  // Action buttons
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () => _navigateToEditLiterature(item),
-                    tooltip: 'Edit',
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-                    onPressed: () => _confirmDelete(item),
-                    tooltip: 'Delete',
-                  ),
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, size: 20, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+                onSelected: (value) {
+                  if (value == 'edit') _navigateToEditLiterature(item);
+                  if (value == 'delete') _confirmDelete(item);
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  const PopupMenuItem(value: 'delete', child: Text('Delete')),
                 ],
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          Text(
+            item.description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.5,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _minimalStat('${item.chapters} CHAPTERS'),
+              const SizedBox(width: 24),
+              _minimalStat('${item.rating.toStringAsFixed(1)} RATING'),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildStat(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 14,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-          ),
-        ),
-      ],
+  Widget _minimalStat(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.5,
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+      ),
     );
   }
-
   IconData _getTypeIcon(String type) {
     switch (type) {
       case 'Novel':

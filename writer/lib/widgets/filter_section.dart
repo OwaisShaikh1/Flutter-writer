@@ -10,15 +10,44 @@ class FilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      children: filters.map((filter) {
-        return ChoiceChip(
-          label: Text(filter),
-          selected: selected == filter,
-          onSelected: (_) => onSelect(filter),
-        );
-      }).toList(),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: filters.map((filter) {
+          final isSelected = selected == filter;
+          return Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: GestureDetector(
+              onTap: () => onSelect(filter),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    filter,
+                    style: TextStyle(
+                      color: isSelected 
+                        ? Theme.of(context).colorScheme.primary 
+                        : Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (isSelected)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      height: 2,
+                      width: 12,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }

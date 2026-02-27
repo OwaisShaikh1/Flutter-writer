@@ -2,13 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../database/database.dart';
-import '../services/sync_service.dart';
+import '../services/sync_service_v2.dart';
 
 enum SyncStatus { idle, syncing, success, error }
 
 class SyncProvider with ChangeNotifier {
   final AppDatabase _db;
-  late final SyncService _syncService;
+  late final SyncServiceV2 _syncService;
 
   SyncStatus _status = SyncStatus.idle;
   bool _isOnline = true;
@@ -19,7 +19,7 @@ class SyncProvider with ChangeNotifier {
   bool _isBackgroundSyncing = false;
 
   SyncProvider(this._db) {
-    _syncService = SyncService(_db);
+    _syncService = SyncServiceV2(_db);
     _initConnectivityListener();
     _checkConnectivity();
     _watchPendingCount();
@@ -216,6 +216,19 @@ class SyncProvider with ChangeNotifier {
   /// Manually trigger background sync (e.g., when app comes to foreground)
   Future<void> triggerBackgroundSync() async {
     await _silentBackgroundSync();
+  }
+
+  /// Reset sync state for user change (logout)
+  /// Does NOT clear pending operations - they stay for when that user logs back in
+  Future<void> resetForUserChange() async {
+    _backgroundSyncTimer?.cancel();
+    // Don't clear pending operations - they're user-specific and filtered by userId
+    _pendingSyncCount = 0;
+    _lastSyncTime = null;
+    _lastSyncMessage = null;
+    _status = SyncStatus.idle;
+    _startBackgroundSyncTimer();
+    notifyListeners();
   }
 
   @override

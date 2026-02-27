@@ -159,7 +159,6 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -176,8 +175,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     Row(
                       children: [
                         Icon(
-                          Icons.cloud,
-                          color: Theme.of(context).colorScheme.primary,
+                          Icons.cloud_rounded,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -194,12 +193,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        color: Theme.of(context).colorScheme.surface,
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.link, size: 18),
+                          const Icon(Icons.link_rounded, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -294,8 +294,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     Row(
                       children: [
                         Icon(
-                          Icons.palette,
-                          color: Theme.of(context).colorScheme.primary,
+                          Icons.palette_rounded,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -338,8 +338,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               child: Row(
                                 children: [
                                   Icon(
-                                    Icons.color_lens,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    Icons.color_lens_rounded,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 8),
@@ -403,14 +403,14 @@ class _SettingsPageState extends State<SettingsPage> {
             
             // Info card
             Card(
-              color: Theme.of(context).colorScheme.primaryContainer,
+              color: Theme.of(context).colorScheme.surface,
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Row(
                   children: [
                     Icon(
-                      Icons.info_outline,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      Icons.info_outline_rounded,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -418,7 +418,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         'Change the server URL if you\'re using a different backend. '
                         'Use your computer\'s IP for local development on physical devices.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                         ),
                       ),
                     ),

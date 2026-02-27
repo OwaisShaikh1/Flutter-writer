@@ -18,7 +18,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 7;
 
   // Migration strategy
   @override
@@ -51,8 +51,31 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(items, items.isLikedByUser);
           await m.createTable(comments);
         }
+        if (from < 6) {
+          // Add serverId column to separate local IDs from backend IDs.
+          // Use raw SQL because Drift 2.x m.addColumn() doesn't accept nullable columns.
+          await customStatement('ALTER TABLE items ADD COLUMN server_id INTEGER');
+          // For existing synced items, set serverId = id (they were previously
+          // synced using the old key-swap mechanism, so their id IS the backend id)
+          await customStatement('UPDATE items SET server_id = id WHERE is_synced = 1');
+        }
+        if (from < 7) {
+          // Add userId column to sync_log for multi-user support
+          await customStatement('ALTER TABLE sync_log ADD COLUMN user_id INTEGER');
+        }
       },
     );
+  }
+
+  /// Clear all user data from all tables (for logout)
+  /// This removes items, chapters, comments, sync logs, user activity, and users
+  Future<void> clearAllUserData() async {
+    await delete(chapters).go();
+    await delete(comments).go();
+    await delete(syncLog).go();
+    await delete(userActivity).go();
+    await delete(items).go();
+    await delete(users).go();
   }
 }
 

@@ -125,9 +125,9 @@ class AuthService {
     }
   }
 
-  // Logout
+  // Logout - clears user credentials but keeps cached data
   Future<void> logout() async {
-    await _storage.clearAll();
+    await _storage.clearUserData();
   }
 
   // Get current token

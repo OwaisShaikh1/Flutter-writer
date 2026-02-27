@@ -7,6 +7,7 @@ class UserProfile {
   final int followers;
   final int following;
   final int posts;
+  final bool isFollowedByUser;
   final DateTime? createdAt;
 
   UserProfile({
@@ -18,10 +19,19 @@ class UserProfile {
     this.followers = 0,
     this.following = 0,
     this.posts = 0,
+    this.isFollowedByUser = false,
     this.createdAt,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
+    // Helper to convert int/bool to bool
+    bool toBool(dynamic value) {
+      if (value == null) return false;
+      if (value is bool) return value;
+      if (value is int) return value != 0;
+      return false;
+    }
+
     return UserProfile(
       id: json['id'] ?? 0,
       name: json['name'] ?? json['Name'] ?? '',
@@ -31,6 +41,7 @@ class UserProfile {
       followers: json['followers'] ?? 0,
       following: json['following'] ?? 0,
       posts: json['posts'] ?? 0,
+      isFollowedByUser: toBool(json['isFollowedByUser'] ?? json['is_followed_by_user']),
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,
@@ -47,6 +58,7 @@ class UserProfile {
       'followers': followers,
       'following': following,
       'posts': posts,
+      'isFollowedByUser': isFollowedByUser,
       'createdAt': createdAt?.toIso8601String(),
     };
   }
@@ -62,6 +74,7 @@ class UserProfile {
       followers: entity.followers,
       following: entity.following,
       posts: entity.posts,
+      isFollowedByUser: false, // Drift entity doesn't have this yet
       createdAt: entity.createdAt,
     );
   }
@@ -75,6 +88,7 @@ class UserProfile {
     int? followers,
     int? following,
     int? posts,
+    bool? isFollowedByUser,
     DateTime? createdAt,
   }) {
     return UserProfile(
@@ -86,6 +100,7 @@ class UserProfile {
       followers: followers ?? this.followers,
       following: following ?? this.following,
       posts: posts ?? this.posts,
+      isFollowedByUser: isFollowedByUser ?? this.isFollowedByUser,
       createdAt: createdAt ?? this.createdAt,
     );
   }

@@ -272,8 +272,24 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
         }
       },
       child: Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.surface,
         appBar: AppBar(
-          title: const Text('Edit Literature'),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+          title: const Text(
+            'EDIT MANUSCRIPT',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.5,
+            ),
+          ),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
           actions: [
             if (_isSaving)
               const Center(
@@ -287,10 +303,21 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
                 ),
               )
             else
-              TextButton.icon(
-                onPressed: _hasChanges ? _saveChanges : null,
-                icon: const Icon(Icons.save),
-                label: const Text('Save'),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: TextButton(
+                  onPressed: _hasChanges ? _saveChanges : null,
+                  child: Text(
+                    'SAVE',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                      color: _hasChanges 
+                          ? Theme.of(context).colorScheme.primary 
+                          : Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                    ),
+                  ),
+                ),
               ),
           ],
         ),
@@ -299,18 +326,26 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
             : Form(
                 key: _formKey,
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Section header
+                      _buildSectionHeader(context, 'Core details'),
+                      const SizedBox(height: 24),
+
                       // Title Field
                       TextFormField(
                         controller: _titleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Title',
-                          hintText: 'Enter the title of your work',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.title),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        decoration: InputDecoration(
+                          hintText: 'Work Title',
+                          hintStyle: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
@@ -321,48 +356,27 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Literature Type Dropdown
-                      DropdownButtonFormField<String>(
-                        value: _selectedType,
-                        decoration: const InputDecoration(
-                          labelText: 'Type of Literature',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.category),
-                        ),
-                        items: _literatureTypes.map((type) {
-                          return DropdownMenuItem(
-                            value: type,
-                            child: Row(
-                              children: [
-                                Icon(_getTypeIcon(type), size: 20),
-                                const SizedBox(width: 8),
-                                Text(type),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _selectedType = value;
-                              _hasChanges = true;
-                            });
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
+                      // Literature Type selector (minimal)
+                      _buildTypeSelector(),
+                      const SizedBox(height: 24),
 
                       // Description Field
                       TextFormField(
                         controller: _descriptionController,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
-                          hintText: 'Enter a brief description or synopsis',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.description),
-                          alignLabelWithHint: true,
+                        style: TextStyle(
+                          fontSize: 15,
+                          height: 1.6,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
                         ),
-                        maxLines: 4,
+                        decoration: InputDecoration(
+                          hintText: 'Write a brief synopsis...',
+                          hintStyle: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        maxLines: null,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Please enter a description';
@@ -370,54 +384,30 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 24),
+                      
+                      const SizedBox(height: 48),
 
                       // Chapters Section
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Chapters (${_chapters.length})',
-                            style: Theme.of(context).textTheme.titleLarge,
+                          Expanded(
+                            child: _buildSectionHeader(context, 'Manuscript chapters'),
                           ),
-                          ElevatedButton.icon(
-                            onPressed: _addChapter,
-                            icon: const Icon(Icons.add),
-                            label: const Text('Add Chapter'),
+                          const SizedBox(width: 12),
+                          Text(
+                            '${_chapters.length}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 24),
 
                       if (_chapters.isEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.outline
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                          ),
-                          child: Center(
-                            child: Column(
-                              children: [
-                                Icon(
-                                  Icons.book_outlined, 
-                                  size: 48, 
-                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'No chapters yet',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
+                        _buildEmptyChapters()
                       else
                         ReorderableListView.builder(
                           shrinkWrap: true,
@@ -426,56 +416,191 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
                           onReorder: _reorderChapters,
                           itemBuilder: (context, index) {
                             final chapter = _chapters[index];
-                            return Card(
-                              key: ValueKey('${chapter.number}_${chapter.title}'),
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  child: Text('${chapter.number}'),
-                                ),
-                                title: Text(chapter.title),
-                                subtitle: Text(
-                                  chapter.content.length > 50
-                                      ? '${chapter.content.substring(0, 50)}...'
-                                      : chapter.content,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () => _editChapter(index),
-                                      tooltip: 'Edit',
-                                    ),
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.delete, 
-                                        color: Theme.of(context).colorScheme.error
-                                      ),
-                                      onPressed: () => _deleteChapter(index),
-                                      tooltip: 'Delete',
-                                    ),
-                                    const Icon(Icons.drag_handle),
-                                  ],
-                                ),
-                              ),
-                            );
+                            return _buildChapterItem(index, chapter);
                           },
                         ),
+                      
+                      const SizedBox(height: 100),
                     ],
                   ),
                 ),
               ),
         floatingActionButton: _chapters.isNotEmpty && !_isLoading
-            ? FloatingActionButton.extended(
+            ? FloatingActionButton(
                 onPressed: _addChapter,
-                icon: const Icon(Icons.add),
-                label: const Text('Add Chapter'),
+                child: const Icon(Icons.add),
               )
             : null,
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(BuildContext context, String title) {
+    return Row(
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Divider(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTypeSelector() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _literatureTypes.map((type) {
+          final isSelected = _selectedType == type;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(type.toUpperCase()),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  setState(() {
+                    _selectedType = type;
+                    _hasChanges = true;
+                  });
+                }
+              },
+              labelStyle: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+                color: isSelected 
+                    ? Theme.of(context).colorScheme.onPrimary 
+                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+              ),
+              selectedColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              showCheckmark: false,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              side: BorderSide.none,
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildEmptyChapters() {
+    return InkWell(
+      onTap: _addChapter,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(
+                Icons.add_circle_outline_rounded,
+                size: 32,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.15),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'ADD FIRST CHAPTER',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChapterItem(int index, ChapterDraft chapter) {
+    return Column(
+      key: ValueKey('${chapter.number}_${chapter.title}'),
+      children: [
+        InkWell(
+          onTap: () => _editChapter(index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: [
+                Text(
+                  '${chapter.number.toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        chapter.title.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${chapter.content.length} characters',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_horiz, size: 20, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2)),
+                  onSelected: (value) {
+                    if (value == 'edit') _editChapter(index);
+                    if (value == 'delete') _deleteChapter(index);
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                ),
+                ReorderableDragStartListener(
+                  index: index,
+                  child: Icon(Icons.drag_handle_rounded, size: 20, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.03),
+        ),
+      ],
     );
   }
 

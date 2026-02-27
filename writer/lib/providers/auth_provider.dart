@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../models/user_profile.dart';
+import '../services/api_service.dart';
 
 enum AuthStatus { initial, authenticated, unauthenticated, loading }
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   final StorageService _storageService = StorageService();
+  final ApiService _apiService = ApiService();
 
   AuthStatus _status = AuthStatus.initial;
   UserProfile? _currentUser;
@@ -73,6 +75,20 @@ class AuthProvider with ChangeNotifier {
     }
     
     notifyListeners();
+  }
+
+  Future<void> refreshUserProfile() async {
+    if (_currentUser == null) return;
+    
+    try {
+      final updatedProfile = await _apiService.fetchUserProfile(_currentUser!.id);
+      if (updatedProfile != null) {
+        _currentUser = updatedProfile;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error refreshing user profile: $e');
+    }
   }
 
   // Verify token in background without blocking UI

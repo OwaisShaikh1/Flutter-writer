@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/literature_provider.dart';
+import '../providers/sync_provider.dart';
 import '../widgets/profile_header.dart';
 import '../widgets/profile_stats.dart';
 import '../widgets/profile_about.dart';
@@ -9,8 +10,24 @@ import 'login_page.dart';
 import 'settings_page.dart';
 // replaced recent activity with local library section
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  @override
+  void initState() {
+    super.initState();
+    // Refresh user profile in background
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthProvider>().refreshUserProfile();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,8 +109,12 @@ class ProfilePage extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(
             title: const Text('Profile'),
-            backgroundColor: Theme.of(context).colorScheme.inversePrimary,
             actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () => authProvider.refreshUserProfile(),
+                tooltip: 'Refresh',
+              ),
               IconButton(
                 icon: const Icon(Icons.settings),
                 onPressed: () => Navigator.push(
@@ -105,6 +126,9 @@ class ProfilePage extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.logout),
                   onPressed: () async {
+                    // Reset provider states for user change
+                    await context.read<LiteratureProvider>().resetForUserChange();
+                    await context.read<SyncProvider>().resetForUserChange();
                     await authProvider.logout();
                     if (context.mounted) {
                       Navigator.pushReplacement(
@@ -117,89 +141,100 @@ class ProfilePage extends StatelessWidget {
                 ),
             ],
           ),
-          body: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            ProfileHeader(userProfile: userProfile),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          body: RefreshIndicator(
+            onRefresh: () => authProvider.refreshUserProfile(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Statistics', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  ProfileStats(userStats: userStats),
-                  const SizedBox(height: 12),
-                  Text('About', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  ProfileAbout(userProfile: userProfile),
-                  const SizedBox(height: 12),
-                  Text('Library', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  ProfileLibrary(userBooks: userBooks),
-                  const SizedBox(height: 12),
+                  ProfileHeader(userProfile: userProfile),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ProfileStats(userStats: userStats),
+                        const SizedBox(height: 32),
+                        
+                        _buildSectionHeader(context, 'About'),
+                        const SizedBox(height: 12),
+                        ProfileAbout(userProfile: userProfile),
+                        
+                        const SizedBox(height: 32),
+                        
+                        _buildSectionHeader(context, 'Library'),
+                        const SizedBox(height: 12),
+                        ProfileLibrary(userBooks: userBooks),
+                        
+                        const SizedBox(height: 40),
 
-                  // Action Buttons (compact)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Edit Profile coming soon...'))),
-                          icon: const Icon(Icons.edit, size: 16),
-                          label: const Text('Edit Profile'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('View Library coming soon...'))),
-                        style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(8)),
-                        child: const Icon(Icons.library_books, size: 18),
-                      ),
-                    ],
-                  ),
-                  
-                  // Login prompt for unauthenticated users
-                  if (!authProvider.isAuthenticated) ...[
-                    const SizedBox(height: 16),
-                    Card(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
+                        // Action Buttons - Minimal
+                        Row(
                           children: [
-                            const Text(
-                              'Login to sync your reading progress across devices',
-                              textAlign: TextAlign.center,
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Edit Profile coming soon...'), behavior: SnackBarBehavior.floating)),
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: Text(
+                                  'EDIT PROFILE',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
                             ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const LoginPage()),
-                                );
-                              },
-                              child: const Text('Login'),
+                            const SizedBox(width: 12),
+                            IconButton(
+                              onPressed: () {},
+                              style: IconButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                padding: const EdgeInsets.all(12),
+                              ),
+                              icon: Icon(Icons.share_outlined, size: 20, color: Theme.of(context).colorScheme.onSurface),
                             ),
                           ],
                         ),
-                      ),
+                        const SizedBox(height: 40),
+                      ],
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
+          ),
+        );
       },
+    );
+  }
+
+  Widget _buildSectionHeader(BuildContext context, String title) {
+    return Row(
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Divider(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+            thickness: 1,
+          ),
+        ),
+      ],
     );
   }
 }

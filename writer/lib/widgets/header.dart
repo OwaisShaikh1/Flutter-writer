@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 import '../pages/profile_page.dart';
 import '../pages/settings_page.dart';
 
@@ -9,13 +11,31 @@ class Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Expanded(
+        Expanded(
           child: Text(
             "Dashboard",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
         ),
+        Consumer<ThemeProvider>(
+          builder: (context, themeProvider, _) {
+            return IconButton(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              icon: Icon(themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+              tooltip: themeProvider.isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+              onPressed: () {
+                themeProvider.toggleTheme();
+              },
+            );
+          },
+        ),
         IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
           icon: const Icon(Icons.settings),
           tooltip: 'Settings',
           onPressed: () {
@@ -25,18 +45,7 @@ class Header extends StatelessWidget {
             );
           },
         ),
-        IconButton(
-          icon: CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            child: Icon(Icons.person, color: Theme.of(context).colorScheme.onPrimary),
-          ),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => ProfilePage()),
-            );
-          },
-        ),
+        
       ],
     );
   }

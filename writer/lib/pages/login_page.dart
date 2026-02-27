@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/literature_provider.dart';
 import 'dashboard.dart';
 import 'register_page.dart';
 import 'settings_page.dart';
@@ -36,6 +37,8 @@ class _LoginPageState extends State<LoginPage> {
     );
 
     if (success && mounted) {
+      // Reload literature provider for the new user
+      await context.read<LiteratureProvider>().reloadForNewUser();
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => Dashboard()),
@@ -95,7 +98,7 @@ class _LoginPageState extends State<LoginPage> {
                   
                   // Title
                   Text(
-                    'Literature Dashboard',
+                    'Literature Club',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),

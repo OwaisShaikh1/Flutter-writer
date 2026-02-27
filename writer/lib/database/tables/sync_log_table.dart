@@ -6,6 +6,9 @@ import 'package:drift/drift.dart';
 class SyncLog extends Table {
   IntColumn get id => integer().autoIncrement()();
   
+  /// The user ID who made this change (for multi-user support)
+  IntColumn get userId => integer().nullable()();
+  
   /// Type of entity: 'item' or 'chapter'
   TextColumn get entityType => text()();
   

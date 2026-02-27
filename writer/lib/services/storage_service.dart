@@ -62,9 +62,18 @@ class StorageService {
     await _storage.delete(key: _nameKey);
   }
 
-  // Clear all stored data (logout)
+  // Clear all stored data (full reset)
   Future<void> clearAll() async {
     await _storage.deleteAll();
+  }
+
+  // Clear user-specific data (for logout - keeps base URL)
+  Future<void> clearUserData() async {
+    await deleteToken();
+    await deleteUserId();
+    await deleteUsername();
+    await deleteName();
+    await clearPendingDeletes();
   }
 
   // Check if user is logged in

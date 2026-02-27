@@ -91,6 +91,7 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
 
   // Change item ID (used when syncing local item to backend ID)
   // This creates a new row with the new ID and deletes the old one
+  // DEPRECATED: Use setServerId() instead to avoid duplicate-item bugs
   Future<void> changeItemId(int oldId, int newId, ItemEntity item) async {
     await into(items).insert(ItemsCompanion(
       id: Value(newId),
@@ -113,6 +114,49 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
     ));
     // Old item will be deleted after chapters are migrated
   }
+
+  // ==================== SERVER ID MANAGEMENT ====================
+
+  /// Set the backend-assigned server ID on a local item after a successful sync.
+  /// The local [id] never changes — only [serverId] is added.
+  Future<void> setServerId(int localId, int serverIdValue) =>
+      (update(items)..where((t) => t.id.equals(localId))).write(ItemsCompanion(
+        serverId: Value(serverIdValue),
+        isSynced: const Value(true),
+        lastSyncedAt: Value(DateTime.now()),
+      ));
+
+  /// Get the backend server ID for a local item (null if not yet synced).
+  ///
+  /// Legacy fallback: items created before v6 (old key-swap era) have their
+  /// SQLite id equal to the backend id. If [serverId] is null but [isSynced]
+  /// is true, return [id] so that old items continue working without a migration.
+  Future<int?> getServerId(int localId) async {
+    final item = await getItemById(localId);
+    if (item == null) return null;
+    if (item.serverId != null) return item.serverId;
+    // Legacy fallback: synced item created before the serverId column existed.
+    // In the old system id == backend id after the key-swap.
+    if (item.isSynced) {
+      // Persist the serverId so future lookups don't need this fallback.
+      await setServerId(localId, item.id);
+      return item.id;
+    }
+    return null;
+  }
+
+  /// Find a local item by its backend server ID.
+  /// Used during pull-sync to avoid creating duplicates.
+  Future<ItemEntity?> getItemByServerId(int serverIdValue) =>
+      (select(items)..where((t) => t.serverId.equals(serverIdValue)))
+          .getSingleOrNull();
+
+  /// Get all items that have been synced to the server (have a server_id).
+  /// Used to detect deletions: if an item has a server_id but is no longer
+  /// on the server, it should be deleted locally.
+  Future<List<ItemEntity>> getSyncedItems() =>
+      (select(items)..where((t) => t.serverId.isNotNull()))
+          .get();
 
   // Update like status for an item
   Future<void> updateLikeStatus(int id, bool isLiked, int likesCount) =>

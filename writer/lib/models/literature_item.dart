@@ -108,11 +108,13 @@ class LiteratureItem {
       'id': id,
       'title': title,
       'author': author,
+      'authorId': authorId,
       'type': type,
       'rating': rating,
       'chapters': chapters,
       'comments': comments,
       'likes': likes,
+      'isLikedByUser': isLikedByUser,
       'image': imageUrl,
       'description': description,
     };

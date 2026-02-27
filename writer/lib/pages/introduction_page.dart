@@ -5,7 +5,9 @@ import '../models/comment.dart';
 import '../providers/literature_provider.dart';
 import '../providers/sync_provider.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import 'chapter_reader_page.dart';
+import 'author_profile_page.dart';
 
 class IntroductionPage extends StatefulWidget {
   final Map<String, dynamic> literatureItem;
@@ -162,12 +164,63 @@ class _IntroductionPageState extends State<IntroductionPage> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  Color _getTypeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'drama': return AppColors.drama;
+      case 'poetry': return AppColors.poetry;
+      case 'novel': return AppColors.novel;
+      case 'article': return AppColors.article;
+      default: return AppColors.other;
+    }
+  }
+
+  Widget _buildFlatStatItem(BuildContext context, IconData icon, Color color, String value, String label, {VoidCallback? onTap, bool isLoading = false}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              isLoading
+                  ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                    )
+                  : Icon(icon, color: color, size: 22),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final typeColor = _getTypeColor(literatureItem['type'] ?? '');
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Literature Details'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -191,206 +244,159 @@ class _IntroductionPageState extends State<IntroductionPage> {
                       child: Icon(
                         Icons.book,
                         size: 100,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
                       ),
                     )
                   : null,
             ),
 
             Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Title
                   Text(
                     literatureItem['title'] ?? 'Untitled',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
                         ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
-                  // Author
+                  // Author & Type Row
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.person, size: 20, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)),
-                      const SizedBox(width: 8),
-                      Text(
-                        literatureItem['author'] ?? 'Unknown Author',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                            ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Type Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      literatureItem['type'] ?? 'Literature',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Rating Section
-                  Row(
-                    children: [
-                      Icon(Icons.star, color: Theme.of(context).colorScheme.tertiary, size: 24),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${literatureItem['rating'] ?? 0.0}',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      Text(
-                        ' / 5.0',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                            ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Stats Row (Chapters, Comments & Likes)
-                  Row(
-                    children: [
-                      // Chapters
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(Icons.menu_book, color: Theme.of(context).colorScheme.primary, size: 28),
-                              const SizedBox(height: 6),
-                              Text(
-                                '${literatureItem['chapters'] ?? 0}',
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                      // Author
+                      InkWell(
+                        onTap: () {
+                          final authorId = literatureItem['authorId'];
+                          if (authorId != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => AuthorProfilePage(
+                                  authorId: authorId,
+                                  authorName: literatureItem['author'] ?? 'Unknown Author',
+                                ),
                               ),
-                              const SizedBox(height: 2),
+                            );
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircleAvatar(
+                                radius: 10,
+                                backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                child: Icon(Icons.person, size: 12, color: Theme.of(context).colorScheme.primary),
+                              ),
+                              const SizedBox(width: 8),
                               Text(
-                                'Chapters',
-                                style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6), fontSize: 12),
+                                literatureItem['author'] ?? 'Unknown Author',
+                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                                      fontWeight: FontWeight.w500,
+                                    ),
                               ),
                             ],
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
 
-                      // Comments - tappable to show comments section
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() => _showComments = !_showComments);
-                            if (_showComments && _comments.isEmpty) {
-                              _loadComments();
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: _showComments ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(Icons.comment, color: Theme.of(context).colorScheme.secondary, size: 28),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '${literatureItem['comments'] ?? 0}',
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Comments',
-                                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6), fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
+                      // Minimal Type Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: typeColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-
-                      // Likes - tappable to toggle like
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: _isTogglingLike ? null : _toggleLike,
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: _isLiked ? Theme.of(context).colorScheme.errorContainer : Theme.of(context).colorScheme.errorContainer.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              children: [
-                                _isTogglingLike
-                                    ? const SizedBox(
-                                        width: 28,
-                                        height: 28,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : Icon(
-                                        _isLiked ? Icons.favorite : Icons.favorite_border,
-                                        color: Theme.of(context).colorScheme.error,
-                                        size: 28,
-                                      ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '$_likesCount',
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Likes',
-                                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6), fontSize: 12),
-                                ),
-                              ],
-                            ),
+                        child: Text(
+                          literatureItem['type']?.toUpperCase() ?? 'LITERATURE',
+                          style: TextStyle(
+                            color: typeColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+
+                  // Stats Row (Rating, Chapters, Comments & Likes)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      // Rating
+                      _buildFlatStatItem(
+                        context,
+                        Icons.star_rounded,
+                        Colors.amber,
+                        '${literatureItem['rating'] ?? 0.0}',
+                        'Rating',
+                      ),
+                      
+                      // Chapters
+                      _buildFlatStatItem(
+                        context,
+                        Icons.menu_book_rounded,
+                        Colors.teal,
+                        '${literatureItem['chapters'] ?? 0}',
+                        'Chapters',
+                      ),
+
+                      // Comments
+                      _buildFlatStatItem(
+                        context,
+                        _showComments ? Icons.comment_rounded : Icons.comment_outlined,
+                        Colors.blue,
+                        '${literatureItem['comments'] ?? 0}',
+                        'Comments',
+                        onTap: () {
+                          setState(() => _showComments = !_showComments);
+                          if (_showComments && _comments.isEmpty) {
+                            _loadComments();
+                          }
+                        },
+                      ),
+
+                      // Likes
+                      _buildFlatStatItem(
+                        context,
+                        _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                        Colors.red,
+                        '$_likesCount',
+                        'Likes',
+                        onTap: _isTogglingLike ? null : _toggleLike,
+                        isLoading: _isTogglingLike,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
 
                   // Description Section
                   if (literatureItem['description'] != null) ...[
                     Text(
-                      'Description',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      'About this work',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                            letterSpacing: 0.5,
                           ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Text(
                       literatureItem['description'],
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            height: 1.6,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            height: 1.5,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                           ),
                     ),
                     const SizedBox(height: 24),
@@ -402,47 +408,65 @@ class _IntroductionPageState extends State<IntroductionPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Comments',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          'COMMENTS',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                          ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close),
+                          icon: const Icon(Icons.close_rounded, size: 20),
                           onPressed: () => setState(() => _showComments = false),
+                          visualDensity: VisualDensity.compact,
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
                     
-                    // Add comment input
+                    // Add comment input (Naked style)
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Expanded(
                           child: TextField(
                             controller: _commentController,
+                            style: const TextStyle(fontSize: 14),
                             decoration: InputDecoration(
-                              hintText: 'Write a comment...',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                              hintText: 'Add a thought...',
+                              hintStyle: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            maxLines: 2,
+                            maxLines: null,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        ElevatedButton(
+                        const SizedBox(width: 8),
+                        TextButton(
                           onPressed: _addComment,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.all(16),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Theme.of(context).colorScheme.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
-                          child: const Icon(Icons.send),
+                          child: const Text(
+                            'POST',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
                         ),
                       ],
+                    ),
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
                     ),
                     const SizedBox(height: 16),
                     

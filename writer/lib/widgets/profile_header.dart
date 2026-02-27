@@ -9,37 +9,22 @@ class ProfileHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(0.06),
-            Theme.of(context).colorScheme.primaryContainer.withOpacity(0.04),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+      child: Column(
         children: [
-          // Avatar on the left
+          // Central Avatar
           Container(
-            width: 72,
-            height: 72,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Theme.of(context).colorScheme.outline,
-              border: Border.all(
-                color: Theme.of(context).colorScheme.primary,
-                width: 2,
-              ),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
             ),
             child: userProfile['profileImage'] == null
                 ? Icon(
-                    Icons.person,
+                    Icons.person_outline_rounded,
                     size: 40,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
                   )
                 : ClipOval(
                     child: Image.network(
@@ -49,57 +34,43 @@ class ProfileHeader extends StatelessWidget {
                   ),
           ),
 
-          const SizedBox(width: 12),
+          const SizedBox(height: 16),
 
-          // Name, role/email and bio to the right
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        userProfile['name'] ?? '',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    if (userProfile['role'] != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                        child: Text(userProfile['role'], style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
-                      ),
-                  ],
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(userProfile['username'] ?? '', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
-
-                const SizedBox(height: 6),
-
-                if (userProfile['email'] != null)
-                  Text(userProfile['email'], style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)
-                  )),
-
-                if (userProfile['bio'] != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    userProfile['bio'],
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.3, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ]
-              ],
+          // Name and Info
+          Text(
+            userProfile['name'] ?? '',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
             ),
           ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            userProfile['username'] ?? '',
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          if (userProfile['bio'] != null)
+            Text(
+              userProfile['bio'],
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.5,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
       ),
     );

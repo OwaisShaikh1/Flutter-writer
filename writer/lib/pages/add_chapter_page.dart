@@ -107,134 +107,132 @@ class _AddChapterPageState extends State<AddChapterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          onPressed: _cancelEditing,
+          icon: const Icon(Icons.close_rounded, size: 20),
+        ),
+        title: Text(
+          widget.isEdit ? 'EDIT CHAPTER' : 'NEW CHAPTER',
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton(
+              onPressed: _saveChapter,
+              child: Text(
+                'DONE',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: Form(
         key: _formKey,
         child: Column(
           children: [
-            // Top section with minimal padding
-            Container(
-              padding: const EdgeInsets.fromLTRB(8, 40, 8, 8),
+            // Chapter title input (naked)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
+              child: TextFormField(
+                controller: _titleController,
+                textCapitalization: TextCapitalization.words,
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Chapter Title',
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
+                  ),
+                  border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter a chapter title';
+                  }
+                  return null;
+                },
+              ),
+            ),
+            
+            // Subtle word count
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
                 children: [
-                  // Back button
-                  IconButton(
-                    onPressed: _cancelEditing,
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  
-                  // Chapter title input (small and compact)
-                  Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      child: TextFormField(
-                        controller: _titleController,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Chapter Title',
-                          border: UnderlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(vertical: 4),
-                          isDense: true,
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter a chapter title';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                  ),
-                  
-                  // Word count in top right corner
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$_wordCount words',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                        fontWeight: FontWeight.w500,
-                      ),
+                  Text(
+                    '$_wordCount WORDS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'monospace',
+                      letterSpacing: 1,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
                     ),
                   ),
                 ],
               ),
             ),
+
+            const SizedBox(height: 24),
             
-            // Main content area - full scrollable text editor
+            // Main content area - naked text editor
             Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                child: TextFormField(
-                  controller: _contentController,
-                  decoration: const InputDecoration(
-                    hintText: 'Start writing your chapter...',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.all(16),
-                  ),
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    height: 1.6,
-                  ),
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter chapter content';
-                    }
-                    return null;
-                  },
+              child: TextFormField(
+                controller: _contentController,
+                textCapitalization: TextCapitalization.sentences,
+                keyboardType: TextInputType.multiline,
+                maxLines: null,
+                expands: true,
+                textAlignVertical: TextAlignVertical.top,
+                style: TextStyle(
+                  height: 1.8,
+                  fontSize: 18,
+                  letterSpacing: 0.1,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
                 ),
-              ),
-            ),
-            
-            // Bottom action buttons
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                border: Border(
-                  top: BorderSide(
-                    color: Theme.of(context).colorScheme.surfaceContainerLow,
-                    width: 1,
+                decoration: InputDecoration(
+                  hintText: 'Start writing your story...',
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
                   ),
+                  border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
                 ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _cancelEditing,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: Text(
-                        'Cancel',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _saveChapter,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: Text(
-                        widget.isEdit ? 'Update' : 'Add Chapter',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                    ),
-                  ),
-                ],
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter chapter content';
+                  }
+                  return null;
+                },
               ),
             ),
           ],

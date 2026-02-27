@@ -59,6 +59,25 @@ class ApiService {
     }
   }
 
+  // Get items by author
+  Future<List<LiteratureItem>> fetchUserItems(int authorId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/items?authorId=$authorId'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) => LiteratureItem.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to load user items: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
+
   // Get all chapters for an item
   Future<List<Chapter>> fetchChapters(int itemId) async {
     try {
@@ -114,6 +133,40 @@ class ApiService {
       return null;
     } catch (e) {
       throw Exception('Failed to fetch user profile: $e');
+    }
+  }
+
+  // Toggle follow status
+  Future<Map<String, dynamic>?> toggleFollow(int userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/users/$userId/follow'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to toggle follow: $e');
+    }
+  }
+
+  // Update own profile
+  Future<bool> updateUserProfile(String name, String bio) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${ApiConstants.baseUrl}/users/profile'),
+        headers: await _getHeaders(),
+        body: jsonEncode({
+          'name': name,
+          'bio': bio,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
     }
   }
 
