@@ -18,7 +18,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   // Migration strategy
   @override
@@ -72,6 +72,11 @@ class AppDatabase extends _$AppDatabase {
           // Initialize updatedAt to createdAt for existing records
           await customStatement('UPDATE items SET updated_at = created_at WHERE updated_at IS NULL');
           await customStatement('UPDATE chapters SET updated_at = created_at WHERE updated_at IS NULL');
+        }
+        if (from < 9) {
+          // Add version columns for conflict resolution
+          await customStatement('ALTER TABLE items ADD COLUMN version INTEGER NOT NULL DEFAULT 1');
+          await customStatement('ALTER TABLE chapters ADD COLUMN version INTEGER NOT NULL DEFAULT 1');
         }
       },
     );

@@ -13,6 +13,8 @@ class Chapters extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   BoolColumn get hasChanged => boolean().withDefault(const Constant(false))();
+  IntColumn get version => integer().withDefault(const Constant(1))(); // For conflict resolution
+  
   @override
   List<Set<Column>> get uniqueKeys => [
         {itemId, number}, // Prevent duplicate chapters

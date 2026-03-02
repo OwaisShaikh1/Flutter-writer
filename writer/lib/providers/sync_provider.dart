@@ -2,31 +2,31 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../database/database.dart';
-import '../services/sync_service.dart';
-import '../services/offline_sync_service.dart';
+import '../services/sync_service.dart' as sync_svc;
+import '../services/offline_sync_service.dart' as offline;
 
 /// Enhanced SyncProvider with Offline Sync Support
 /// Handles connectivity status, background sync, and offline queue processing
 class SyncProvider with ChangeNotifier {
   final AppDatabase _db;
-  late final SyncService _syncService;
-  late final OfflineSyncService _offlineSyncService;
+  late final sync_svc.SyncService _syncService;
+  late final offline.OfflineSyncService _offlineSyncService;
 
   bool _isOnline = true;
   bool _isSyncing = false;
   String? _lastError;
   DateTime? _lastSyncTime;
-  SyncStatus _syncStatus = SyncStatus.synced;
+  offline.SyncStatus _syncStatus = offline.SyncStatus.synced;
   int _pendingCount = 0;
 
   StreamSubscription<dynamic>? _connectivitySubscription;
-  StreamSubscription<SyncStatus>? _syncStatusSubscription;
+  StreamSubscription<offline.SyncStatus>? _syncStatusSubscription;
   StreamSubscription<int>? _pendingCountSubscription;
   Timer? _backgroundSyncTimer;
 
   SyncProvider(this._db) {
-    _syncService = SyncService(_db);
-    _offlineSyncService = OfflineSyncService(_db);
+    _syncService = sync_svc.SyncService(_db);
+    _offlineSyncService = offline.OfflineSyncService(_db);
     _initConnectivity();
     _initSyncStatusWatching();
     _startBackgroundSync();
@@ -37,11 +37,11 @@ class SyncProvider with ChangeNotifier {
   bool get isSyncing => _isSyncing;
   String? get lastError => _lastError;
   DateTime? get lastSyncTime => _lastSyncTime;
-  SyncStatus get syncStatus => _syncStatus;
+  offline.SyncStatus get syncStatus => _syncStatus;
   int get pendingCount => _pendingCount;
   bool get hasOfflineChanges => _pendingCount > 0;
-  SyncService get syncService => _syncService;
-  OfflineSyncService get offlineSyncService => _offlineSyncService;
+  sync_svc.SyncService get syncService => _syncService;
+  offline.OfflineSyncService get offlineSyncService => _offlineSyncService;
 
   /// Initialize connectivity monitoring
   void _initConnectivity() {
@@ -85,15 +85,11 @@ class SyncProvider with ChangeNotifier {
     });
   }
 
-  /// Start background sync timer
+  /// Start background sync monitoring
   void _startBackgroundSync() {
-    // Sync every 5 minutes when app is active
-    _backgroundSyncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      if (_isOnline && !_isSyncing && _pendingCount > 0) {
-        print('⏰ SYNC PROVIDER: Background sync triggered...');
-        _processOfflineQueue();
-      }
-    });
+    // The OfflineSyncService now handles its own intelligent exponential backoff
+    // We just need to trigger immediate sync when coming back online
+    print('📡 SYNC PROVIDER: Background sync monitoring started');
   }
 
   Future<void> _checkConnectivity() async {
@@ -107,9 +103,9 @@ class SyncProvider with ChangeNotifier {
   }
 
   /// Full sync: Pull from server + Process offline queue
-  Future<SyncResult> sync() async {
+  Future<offline.SyncResult> sync() async {
     if (_isSyncing) {
-      return SyncResult(success: false, message: 'Sync already in progress');
+      return offline.SyncResult(success: false, message: 'Sync already in progress');
     }
 
     _isSyncing = true;
@@ -119,8 +115,8 @@ class SyncProvider with ChangeNotifier {
     try {
       print('🔄 SYNC PROVIDER: Starting full sync...');
       
-      SyncResult pullResult = SyncResult(success: true, message: 'No pull needed');
-      SyncResult queueResult = SyncResult(success: true, message: 'No queue to process');
+      sync_svc.SyncResult pullResult = sync_svc.SyncResult(success: true, message: 'No pull needed');
+      offline.SyncResult queueResult = offline.SyncResult(success: true, message: 'No queue to process');
 
       // Pull latest data from server
       if (_isOnline) {
@@ -144,7 +140,7 @@ class SyncProvider with ChangeNotifier {
       _isSyncing = false;
       notifyListeners();
 
-      return SyncResult(
+      return offline.SyncResult(
         success: pullResult.success || queueResult.success,
         message: 'Pull: ${pullResult.message} | Queue: ${queueResult.message}',
         itemCount: (pullResult.itemCount ?? 0) + (queueResult.itemCount ?? 0),
@@ -154,18 +150,18 @@ class SyncProvider with ChangeNotifier {
       _lastError = 'Sync failed: $e';
       _isSyncing = false;
       notifyListeners();
-      return SyncResult(success: false, message: _lastError!);
+      return offline.SyncResult(success: false, message: _lastError!);
     }
   }
 
   /// Process offline queue only
-  Future<SyncResult> processOfflineQueue() async {
+  Future<offline.SyncResult> processOfflineQueue() async {
     return _processOfflineQueue();
   }
 
-  Future<SyncResult> _processOfflineQueue() async {
+  Future<offline.SyncResult> _processOfflineQueue() async {
     if (_isSyncing || !_isOnline || _pendingCount == 0) {
-      return SyncResult(success: false, message: 'Cannot process queue right now');
+      return offline.SyncResult(success: false, message: 'Cannot process queue right now');
     }
 
     _isSyncing = true;
@@ -188,7 +184,7 @@ class SyncProvider with ChangeNotifier {
       _lastError = 'Queue processing failed: $e';
       _isSyncing = false;
       notifyListeners();
-      return SyncResult(success: false, message: _lastError!);
+      return offline.SyncResult(success: false, message: _lastError!);
     }
   }
 
@@ -202,9 +198,9 @@ class SyncProvider with ChangeNotifier {
   }
 
   /// Download chapters for an item
-  Future<SyncResult> downloadChapters(int itemId) async {
+  Future<sync_svc.SyncResult> downloadChapters(int itemId) async {
     if (!_isOnline) {
-      return SyncResult(success: false, message: 'No internet connection');
+      return sync_svc.SyncResult(success: false, message: 'No internet connection');
     }
     return await _syncService.pullChapters(itemId);
   }
@@ -216,7 +212,7 @@ class SyncProvider with ChangeNotifier {
   }
 
   /// Force sync to happen immediately (manual trigger)
-  Future<SyncResult> forcSync() async {
+  Future<offline.SyncResult> forceSync() async {
     print('🚀 SYNC PROVIDER: Force sync triggered');
     return await sync();
   }
@@ -226,7 +222,7 @@ class SyncProvider with ChangeNotifier {
     _lastSyncTime = null;
     _lastError = null;
     _pendingCount = 0;
-    _syncStatus = SyncStatus.synced;
+    _syncStatus = offline.SyncStatus.synced;
     notifyListeners();
   }
 
@@ -241,13 +237,13 @@ class SyncProvider with ChangeNotifier {
     if (!_isOnline) return 'Offline';
     
     switch (_syncStatus) {
-      case SyncStatus.synced:
+      case offline.SyncStatus.synced:
         return _pendingCount > 0 ? 'Changes pending' : 'Synced';
-      case SyncStatus.queued:
+      case offline.SyncStatus.queued:
         return 'Changes queued ($pendingCount)';
-      case SyncStatus.syncing:
+      case offline.SyncStatus.syncing:
         return 'Syncing...';
-      case SyncStatus.error:
+      case offline.SyncStatus.error:
         return 'Sync error';
     }
   }

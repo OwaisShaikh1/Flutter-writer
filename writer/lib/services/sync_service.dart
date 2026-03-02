@@ -27,16 +27,26 @@ class SyncService {
     try {
       final dynamic result = await Connectivity().checkConnectivity();
       print('📡 CONNECTIVITY: Result type: ${result.runtimeType}, value: $result');
+      
       // Handle both List<ConnectivityResult> (newer API) and single ConnectivityResult (older API)
+      bool hasNetwork = false;
       if (result is List) {
-        final online = result.isNotEmpty && !result.contains(ConnectivityResult.none);
-        print('📡 CONNECTIVITY: List check - online: $online');
-        return online;
+        hasNetwork = result.isNotEmpty && !result.contains(ConnectivityResult.none);
       } else {
-        final online = result != ConnectivityResult.none;
-        print('📡 CONNECTIVITY: Single check - online: $online');
-        return online;
+        hasNetwork = result != ConnectivityResult.none;
       }
+      
+      print('📡 CONNECTIVITY: Network check - hasNetwork: $hasNetwork');
+      
+      // If no basic connectivity, definitely offline
+      if (!hasNetwork) {
+        return false;
+      }
+      
+      // Check actual server reachability
+      final serverReachable = await _api.isServerReachable();
+      print('📡 CONNECTIVITY: Final check - network: $hasNetwork, server: $serverReachable');
+      return serverReachable;
     } catch (e, stack) {
       print('📡 CONNECTIVITY: Error checking connectivity: $e');
       print('📡 CONNECTIVITY: Stack: $stack');

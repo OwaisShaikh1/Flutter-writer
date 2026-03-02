@@ -21,8 +21,18 @@ class _MyWorksPageState extends State<MyWorksPage> {
     // Sync with backend and refresh my works when page loads
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = Provider.of<LiteratureProvider>(context, listen: false);
-      await provider.syncWithBackend();
+      
+      // Always refresh from local first (instant)
       provider.refreshMyWorks();
+      
+      // Then try to sync in background
+      try {
+        await provider.syncWithBackend();
+      } catch (e) {
+        // Sync failure is handled gracefully by provider
+        // No need to show error since local data is still available
+        print('Background sync failed, but local data is available: $e');
+      }
     });
   }
 
@@ -131,6 +141,36 @@ class _MyWorksPageState extends State<MyWorksPage> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          // Offline status indicator
+          Consumer<LiteratureProvider>(
+            builder: (context, provider, child) {
+              if (provider.hasOfflineChanges) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16.0),
+                  child: Icon(
+                    Icons.cloud_off,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                    size: 20,
+                  ),
+                );
+              } else if (provider.isSyncing) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16.0),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
       ),
       body: Consumer2<LiteratureProvider, AuthProvider>(
         builder: (context, literatureProvider, authProvider, _) {
@@ -220,43 +260,79 @@ class _MyWorksPageState extends State<MyWorksPage> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.draw_outlined,
-              size: 48,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.15),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'THE CANVAS IS BLANK',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Begin your first masterpiece today.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
-            ),
-            const SizedBox(height: 40),
-            TextButton.icon(
-              onPressed: _navigateToCreateLiterature,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('CREATE NEW WORK'),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              ),
-            ),
-          ],
+        child: Consumer<LiteratureProvider>(
+          builder: (context, provider, child) {
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.draw_outlined,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.15),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'THE CANVAS IS BLANK',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Begin your first masterpiece today.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  ),
+                ),
+                // Show offline status if applicable
+                if (provider.errorMessage != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.onTertiaryContainer,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            provider.errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onTertiaryContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 40),
+                TextButton.icon(
+                  onPressed: _navigateToCreateLiterature,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('CREATE NEW WORK'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

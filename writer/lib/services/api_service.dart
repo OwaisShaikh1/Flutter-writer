@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -9,6 +10,17 @@ import '../models/chapter.dart';
 import '../models/comment.dart';
 import '../models/user_profile.dart';
 import '../utils/constants.dart';
+
+/// Custom exception to distinguish between network errors and server errors
+class ApiException implements Exception {
+  final String message;
+  final bool isNetworkError;
+  
+  ApiException(this.message, {required this.isNetworkError});
+  
+  @override
+  String toString() => 'ApiException: $message';
+}
 
 class ApiService {
   final AuthService _authService = AuthService();
@@ -22,14 +34,14 @@ class ApiService {
     };
   }
 
-  // Get all items from backend
+  // Get all items from backend with timeout
   Future<List<LiteratureItem>> fetchItems() async {
     try {
       print('📡 API: Fetching all items from ${ApiConstants.baseUrl}/items');
       final response = await http.get(
         Uri.parse('${ApiConstants.baseUrl}/items'),
         headers: await _getHeaders(),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -37,11 +49,17 @@ class ApiService {
         return data.map((json) => LiteratureItem.fromJson(json)).toList();
       } else {
         print('❌ API: Failed to load items: ${response.statusCode} - ${response.body}');
-        throw Exception('Failed to load items: ${response.statusCode}');
+        throw ApiException('Server returned ${response.statusCode}', isNetworkError: false);
       }
+    } on SocketException {
+      print('❌ API: No internet connection');
+      throw ApiException('No internet connection', isNetworkError: true);
+    } on TimeoutException {
+      print('❌ API: Request timeout');
+      throw ApiException('Request timeout', isNetworkError: true);
     } catch (e) {
       print('❌ API: Network error: $e');
-      throw Exception('Network error: $e');
+      throw ApiException('Network error: $e', isNetworkError: true);
     }
   }
 
@@ -63,6 +81,26 @@ class ApiService {
     } catch (e) {
       print('❌ fetchItem($id) exception: $e');
       throw Exception('Failed to fetch item: $e');
+    }
+  }
+
+  // Get specific item by ID as raw JSON for conflict detection
+  Future<Map<String, dynamic>?> getItem(int id) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/items/$id'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        print('⚠️ getItem($id) returned status ${response.statusCode}: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ getItem($id) exception: $e');
+      throw Exception('Failed to get item: $e');
     }
   }
 
@@ -391,21 +429,35 @@ class ApiService {
     required String description,
     double review = 0,
     String? imageUrl,
+    int? version,
   }) async {
     try {
+      final body = jsonEncode({
+        'name': name,
+        'type': type,
+        'description': description,
+        'review': review,
+        'imageUrl': imageUrl,
+        if (version != null) 'version': version,
+      });
+      
+      print('📡 API: Updating item $itemId with data: $body');
+      
       final response = await http.put(
         Uri.parse('${ApiConstants.baseUrl}/items/$itemId'),
         headers: await _getHeaders(),
-        body: jsonEncode({
-          'name': name,
-          'type': type,
-          'description': description,
-          'review': review,
-          'imageUrl': imageUrl,
-        }),
+        body: body,
       );
-      return response.statusCode == 200;
+      
+      if (response.statusCode == 200) {
+        print('✅ API: Successfully updated item $itemId');
+        return true;
+      } else {
+        print('❌ API: Update failed for item $itemId - Status: ${response.statusCode}, Response: ${response.body}');
+        return false;
+      }
     } catch (e) {
+      print('❌ API: Update exception for item $itemId: $e');
       throw Exception('Failed to update item: $e');
     }
   }
@@ -620,5 +672,43 @@ class ApiService {
     } catch (e) {
       return 0;
     }
+  }
+
+  /// Ping server to check actual connectivity
+  /// Returns true if server is reachable, false otherwise
+  Future<bool> ping({Duration timeout = const Duration(seconds: 5)}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/ping'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      ).timeout(timeout);
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('📡 API: Ping failed - $e');
+      return false;
+    }
+  }
+
+  /// Check if server is reachable with cached result
+  static DateTime? _lastPingTime;
+  static bool _lastPingResult = false;
+  static const Duration _pingCacheTimeout = Duration(seconds: 30);
+
+  Future<bool> isServerReachable() async {
+    final now = DateTime.now();
+    
+    // Use cached result if recent
+    if (_lastPingTime != null && 
+        now.difference(_lastPingTime!).compareTo(_pingCacheTimeout) < 0) {
+      return _lastPingResult;
+    }
+
+    // Perform new ping
+    _lastPingResult = await ping();
+    _lastPingTime = now;
+    return _lastPingResult;
   }
 }
