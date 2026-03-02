@@ -144,7 +144,7 @@ class _CreateLiteraturePageState extends State<CreateLiteraturePage> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final authorName = authProvider.currentUser?.name ?? 'Unknown Author';
       
-      await provider.createLiterature(
+      final result = await provider.createLiterature(
         title: _titleController.text.trim(),
         author: authorName,
         type: _selectedType,
@@ -153,13 +153,22 @@ class _CreateLiteraturePageState extends State<CreateLiteraturePage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Literature created successfully!'),
-            backgroundColor: Theme.of(context).colorScheme.primary,
-          ),
-        );
-        Navigator.pop(context, true);
+        if (result != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Literature created successfully!'),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+            ),
+          );
+          Navigator.pop(context, true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(provider.errorMessage ?? 'Failed to create (check internet)'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

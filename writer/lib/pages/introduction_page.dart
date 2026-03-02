@@ -23,10 +23,12 @@ class _IntroductionPageState extends State<IntroductionPage> {
   final TextEditingController _commentController = TextEditingController();
   
   bool _isLiked = false;
+  bool _isInLibrary = false;
   int _likesCount = 0;
   List<Comment> _comments = [];
   bool _isLoadingComments = false;
   bool _isTogglingLike = false;
+  bool _isTogglingLibrary = false;
   bool _showComments = false;
 
   Map<String, dynamic> get literatureItem => widget.literatureItem;
@@ -37,6 +39,7 @@ class _IntroductionPageState extends State<IntroductionPage> {
     _isLiked = literatureItem['isLikedByUser'] ?? false;
     _likesCount = literatureItem['likes'] ?? 0;
     _loadLikeStatus();
+    _loadLibraryStatus();
   }
 
   @override
@@ -54,6 +57,54 @@ class _IntroductionPageState extends State<IntroductionPage> {
           setState(() => _isLiked = liked);
         }
       } catch (_) {}
+    }
+  }
+
+  Future<void> _loadLibraryStatus() async {
+    final itemId = literatureItem['id'] ?? 0;
+    if (itemId > 0) {
+      try {
+        final inLibrary = await _apiService.checkLibraryStatus(itemId);
+        if (mounted) {
+          setState(() => _isInLibrary = inLibrary);
+        }
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _toggleLibrary() async {
+    if (_isTogglingLibrary) return;
+    
+    final itemId = literatureItem['id'] ?? 0;
+    if (itemId <= 0) return;
+
+    setState(() => _isTogglingLibrary = true);
+    
+    try {
+      bool success;
+      if (_isInLibrary) {
+        success = await _apiService.removeFromLibrary(itemId);
+      } else {
+        success = await _apiService.addToLibrary(itemId);
+      }
+      
+      if (success && mounted) {
+        setState(() => _isInLibrary = !_isInLibrary);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isInLibrary ? 'Added to Library' : 'Removed from Library'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update library: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTogglingLibrary = false);
     }
   }
 
@@ -214,6 +265,68 @@ class _IntroductionPageState extends State<IntroductionPage> {
     );
   }
 
+  Future<void> _handleRefresh() async {
+    // Refresh all data for the page
+    final itemId = literatureItem['id'] ?? 0;
+    
+    try {
+      // Show loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Refreshing data...'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+      
+      // Also sync with backend and refresh the literature provider data
+      final literatureProvider = Provider.of<LiteratureProvider>(context, listen: false);
+      await literatureProvider.syncWithBackend();
+      await literatureProvider.refreshMyWorks();
+      
+      // Refresh main item data if we have a valid ID
+      if (itemId > 0) {
+        final freshItem = await _apiService.fetchItem(itemId);
+        if (freshItem != null && mounted) {
+          // Update the literature item with fresh data
+          setState(() {
+            widget.literatureItem.clear();
+            widget.literatureItem.addAll(freshItem.toJson());
+            _likesCount = freshItem.likes ?? 0;
+          });
+        }
+      }
+      
+      // Refresh interaction statuses and comments
+      await Future.wait([
+        _loadLikeStatus(),
+        _loadLibraryStatus(),
+        if (_showComments) _loadComments(),
+      ]);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Content refreshed successfully'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to refresh: $e'),
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final typeColor = _getTypeColor(literatureItem['type'] ?? '');
@@ -222,10 +335,13 @@ class _IntroductionPageState extends State<IntroductionPage> {
       appBar: AppBar(
         title: const Text('Literature Details'),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Image Section
             Container(
               width: double.infinity,
@@ -376,6 +492,17 @@ class _IntroductionPageState extends State<IntroductionPage> {
                         'Likes',
                         onTap: _isTogglingLike ? null : _toggleLike,
                         isLoading: _isTogglingLike,
+                      ),
+
+                      // Library
+                      _buildFlatStatItem(
+                        context,
+                        _isInLibrary ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                        Colors.deepPurple,
+                        _isInLibrary ? 'IN LIB' : 'ADD',
+                        'Library',
+                        onTap: _isTogglingLibrary ? null : _toggleLibrary,
+                        isLoading: _isTogglingLibrary,
                       ),
                     ],
                   ),
@@ -629,50 +756,30 @@ class _IntroductionPageState extends State<IntroductionPage> {
                     ],
                   ),
                   
-                  // Download for offline button
+                  // Access settings for offline download
                   const SizedBox(height: 16),
-                  Consumer<SyncProvider>(
-                    builder: (context, syncProvider, _) {
-                      return OutlinedButton.icon(
-                        onPressed: syncProvider.isSyncing
-                            ? null
-                            : () async {
-                                final itemId = literatureItem['id'] ?? 0;
-                                if (itemId > 0) {
-                                  final result = await syncProvider.downloadChapters(itemId);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(result.message),
-                                        backgroundColor: result.success ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                        icon: syncProvider.isSyncing
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.download_for_offline),
-                        label: Text(
-                          syncProvider.isSyncing
-                              ? 'Downloading...'
-                              : 'Download for Offline',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          minimumSize: const Size(double.infinity, 0),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      // Navigate to settings or show info
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Use Settings to download content for offline reading'),
+                          behavior: SnackBarBehavior.floating,
                         ),
                       );
                     },
+                    icon: const Icon(Icons.settings),
+                    label: const Text('Go to Settings for Downloads'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      minimumSize: const Size(double.infinity, 0),
+                    ),
                   ),
                 ],
               ),
             ),
           ],
+          ),
         ),
       ),
     );

@@ -59,6 +59,11 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
   Future<void> _loadChapters() async {
     try {
       final provider = Provider.of<LiteratureProvider>(context, listen: false);
+      
+      // First, pull fresh chapters from server (this also deletes removed chapters)
+      await provider.downloadChapters(widget.item.id);
+      
+      // Then load from local DB
       final chapters = await provider.getChaptersForItem(widget.item.id);
       
       setState(() {
@@ -203,7 +208,7 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
     try {
       final provider = Provider.of<LiteratureProvider>(context, listen: false);
       
-      await provider.updateLiterature(
+      final success = await provider.updateLiterature(
         id: widget.item.id,
         title: _titleController.text.trim(),
         author: widget.item.author,
@@ -213,13 +218,22 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Changes saved successfully!'),
-            backgroundColor: Theme.of(context).colorScheme.primary,
-          ),
-        );
-        Navigator.pop(context, true);
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Changes saved successfully!'),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+            ),
+          );
+          Navigator.pop(context, true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(provider.errorMessage ?? 'Failed to save (check internet)'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

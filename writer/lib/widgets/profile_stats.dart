@@ -25,12 +25,13 @@ class ProfileStats extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           _minimalStat(context, '${userStats['following']}', 'Following'),
+          const SizedBox(width: 32),
           _minimalStat(context, '${userStats['followers']}', 'Followers'),
+          const SizedBox(width: 32),
           _minimalStat(context, '${userStats['articlesWritten']}', 'Works'),
-          _minimalStat(context, '${userStats['favorites']}', 'Library'),
         ],
       ),
     );
@@ -38,6 +39,7 @@ class ProfileStats extends StatelessWidget {
 
   Widget _minimalStat(BuildContext context, String value, String label) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           value,

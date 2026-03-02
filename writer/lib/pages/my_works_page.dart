@@ -18,9 +18,11 @@ class _MyWorksPageState extends State<MyWorksPage> {
   @override
   void initState() {
     super.initState();
-    // Refresh my works when page loads
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<LiteratureProvider>(context, listen: false).refreshMyWorks();
+    // Sync with backend and refresh my works when page loads
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final provider = Provider.of<LiteratureProvider>(context, listen: false);
+      await provider.syncWithBackend();
+      provider.refreshMyWorks();
     });
   }
 
@@ -31,8 +33,10 @@ class _MyWorksPageState extends State<MyWorksPage> {
     );
     
     if (result == true && mounted) {
-      // Refresh the list after creating new literature
-      Provider.of<LiteratureProvider>(context, listen: false).refreshMyWorks();
+      // Sync with backend and refresh the list after creating new literature
+      final provider = Provider.of<LiteratureProvider>(context, listen: false);
+      await provider.syncWithBackend();
+      provider.refreshMyWorks();
     }
   }
 
@@ -45,8 +49,10 @@ class _MyWorksPageState extends State<MyWorksPage> {
     );
     
     if (result == true && mounted) {
-      // Refresh the list after editing
-      Provider.of<LiteratureProvider>(context, listen: false).refreshMyWorks();
+      // Sync with backend and refresh the list after editing
+      final provider = Provider.of<LiteratureProvider>(context, listen: false);
+      await provider.syncWithBackend();
+      provider.refreshMyWorks();
     }
   }
 
@@ -64,15 +70,24 @@ class _MyWorksPageState extends State<MyWorksPage> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              await Provider.of<LiteratureProvider>(context, listen: false)
-                  .deleteItem(item.id);
+              final provider = Provider.of<LiteratureProvider>(context, listen: false);
+              final success = await provider.deleteItem(item.id);
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('"${item.title}" deleted'),
-                    backgroundColor: Theme.of(context).colorScheme.tertiary,
-                  ),
-                );
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('"${item.title}" deleted'),
+                      backgroundColor: Theme.of(context).colorScheme.tertiary,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(provider.errorMessage ?? 'Failed to delete (check internet)'),
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                  );
+                }
               }
             },
             style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
@@ -85,28 +100,34 @@ class _MyWorksPageState extends State<MyWorksPage> {
 
   Color _getTypeColor(String type) {
     switch (type.toLowerCase()) {
-      case 'drama': return AppColors.drama;
-      case 'poetry': return AppColors.poetry;
-      case 'novel': return AppColors.novel;
-      case 'article': return AppColors.article;
-      default: return AppColors.other;
+      case 'drama':
+        return AppColors.drama;
+      case 'poetry':
+        return AppColors.poetry;
+      case 'novel':
+        return AppColors.novel;
+      case 'short story':
+        return AppColors.drama;
+      case 'essay':
+        return AppColors.article;
+      case 'biography':
+        return AppColors.other;
+      default:
+        return AppColors.other;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        title: const Text(
+        title: Text(
           'MY MANUSCRIPTS',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.5,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         centerTitle: true,
@@ -124,7 +145,10 @@ class _MyWorksPageState extends State<MyWorksPage> {
           }
 
           return RefreshIndicator(
-            onRefresh: () => literatureProvider.refreshMyWorks(),
+            onRefresh: () async {
+              await literatureProvider.syncWithBackend();
+              literatureProvider.refreshMyWorks();
+            },
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               itemCount: myWorks.length,

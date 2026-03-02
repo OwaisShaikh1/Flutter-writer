@@ -20,4 +20,6 @@ class Items extends Table {
   BoolColumn get isSynced => boolean().withDefault(const Constant(false))();
   DateTimeColumn get lastSyncedAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  BoolColumn get hasChanged => boolean().withDefault(const Constant(false))();
 }

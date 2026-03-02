@@ -4,7 +4,15 @@ class FilterSection extends StatelessWidget {
   final String selected;
   final Function(String) onSelect;
 
-  final List<String> filters = const ["All", "Poems", "Drama", "Novel"];
+  final List<String> filters = const [
+    "All",
+    "Novel",
+    "Poetry",
+    "Drama",
+    "Short Story",
+    "Essay",
+    "Biography",
+  ];
 
   const FilterSection({super.key, required this.selected, required this.onSelect});
 

@@ -7,6 +7,7 @@ class Chapter {
   final bool isDownloaded;
   final DateTime? downloadedAt;
   final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   Chapter({
     required this.id,
@@ -17,6 +18,7 @@ class Chapter {
     this.isDownloaded = false,
     this.downloadedAt,
     this.createdAt,
+    this.updatedAt,
   });
 
   factory Chapter.fromJson(Map<String, dynamic> json) {
@@ -25,13 +27,16 @@ class Chapter {
       itemId: json['itemId'] ?? json['item_id'] ?? json['bookId'] ?? 0,
       number: json['number'] ?? json['chapterNumber'] ?? 0,
       title: json['title'] ?? json['name'] ?? 'Chapter ${json['number'] ?? 0}',
-      content: json['content'] ?? json['Text'] ?? '',
+      content: json['content'] ?? json['text'] ?? json['Text'] ?? '',
       isDownloaded: json['isDownloaded'] ?? false,
       downloadedAt: json['downloadedAt'] != null
           ? DateTime.tryParse(json['downloadedAt'].toString())
           : null,
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'].toString())
+      createdAt: json['createdAt'] != null || json['created_at'] != null
+          ? DateTime.tryParse((json['createdAt'] ?? json['created_at']).toString())
+          : null,
+      updatedAt: json['updatedAt'] != null || json['updated_at'] != null
+          ? DateTime.tryParse((json['updatedAt'] ?? json['updated_at']).toString())
           : null,
     );
   }
@@ -60,6 +65,7 @@ class Chapter {
       isDownloaded: entity.isDownloaded,
       downloadedAt: entity.downloadedAt,
       createdAt: entity.createdAt,
+      updatedAt: entity.updatedAt,
     );
   }
 
@@ -72,6 +78,7 @@ class Chapter {
     bool? isDownloaded,
     DateTime? downloadedAt,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return Chapter(
       id: id ?? this.id,
@@ -82,6 +89,7 @@ class Chapter {
       isDownloaded: isDownloaded ?? this.isDownloaded,
       downloadedAt: downloadedAt ?? this.downloadedAt,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

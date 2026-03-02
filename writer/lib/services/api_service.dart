@@ -25,6 +25,7 @@ class ApiService {
   // Get all items from backend
   Future<List<LiteratureItem>> fetchItems() async {
     try {
+      print('📡 API: Fetching all items from ${ApiConstants.baseUrl}/items');
       final response = await http.get(
         Uri.parse('${ApiConstants.baseUrl}/items'),
         headers: await _getHeaders(),
@@ -32,11 +33,14 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+        print('✅ API: Received ${data.length} items from server');
         return data.map((json) => LiteratureItem.fromJson(json)).toList();
       } else {
+        print('❌ API: Failed to load items: ${response.statusCode} - ${response.body}');
         throw Exception('Failed to load items: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ API: Network error: $e');
       throw Exception('Network error: $e');
     }
   }
@@ -52,10 +56,33 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return LiteratureItem.fromJson(data);
+      } else {
+        print('⚠️ fetchItem($id) returned status ${response.statusCode}: ${response.body}');
+        return null;
       }
-      return null;
     } catch (e) {
+      print('❌ fetchItem($id) exception: $e');
       throw Exception('Failed to fetch item: $e');
+    }
+  }
+
+  // Get items by list of IDs
+  Future<List<LiteratureItem>> fetchItemsByIds(List<int> ids) async {
+    if (ids.isEmpty) return [];
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/items?ids=${ids.join(',')}'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) => LiteratureItem.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to load items by IDs: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
     }
   }
 
@@ -81,18 +108,50 @@ class ApiService {
   // Get all chapters for an item
   Future<List<Chapter>> fetchChapters(int itemId) async {
     try {
+      print('📡 API: Fetching chapters for item $itemId');
       final response = await http.get(
         Uri.parse('${ApiConstants.baseUrl}/chapters?bookId=$itemId'),
         headers: await _getHeaders(),
       );
 
+      print('📡 API: Response status: ${response.statusCode}');
+      print('📡 API: Response body: ${response.body}');
+
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Chapter.fromJson(json)).toList();
+        print('📡 API: Parsed ${data.length} chapters');
+        return data.map((json) {
+          print('📡 API: Parsing chapter JSON: $json');
+          return Chapter.fromJson(json);
+        }).toList();
+      }
+      return [];
+    } catch (e, stack) {
+      print('📡 API: Error fetching chapters: $e');
+      print('📡 API: Stack trace: $stack');
+      throw Exception('Failed to fetch chapters: $e');
+    }
+  }
+
+  // Get chapter metadata only (without content) for lazy loading
+  Future<List<Chapter>> fetchChaptersMetadata(int itemId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/chapters?bookId=$itemId&metadataOnly=true'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        // Map with empty content since metadata doesn't include it
+        return data.map((json) => Chapter.fromJson({
+          ...json,
+          'Text': '', // Empty content for metadata-only
+        })).toList();
       }
       return [];
     } catch (e) {
-      throw Exception('Failed to fetch chapters: $e');
+      throw Exception('Failed to fetch chapter metadata: $e');
     }
   }
 
@@ -154,17 +213,80 @@ class ApiService {
   }
 
   // Update own profile
-  Future<bool> updateUserProfile(String name, String bio) async {
+  Future<bool> updateUserProfile({String? name, String? bio, List<int>? library}) async {
     try {
       final response = await http.put(
         Uri.parse('${ApiConstants.baseUrl}/users/profile'),
         headers: await _getHeaders(),
         body: jsonEncode({
-          'name': name,
-          'bio': bio,
+          if (name != null) 'name': name,
+          if (bio != null) 'bio': bio,
+          if (library != null) 'library': library,
         }),
       );
       return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Library management helpers
+  Future<bool> addToLibrary(int itemId) async {
+    try {
+      final token = await _authService.getToken();
+      if (token == null) return false;
+      
+      final currentUserId = await _authService.getCurrentUserId();
+      if (currentUserId == null) return false;
+      
+      final profile = await fetchUserProfile(currentUserId);
+      if (profile == null) return false;
+      
+      final newLibrary = List<int>.from(profile.library);
+      if (!newLibrary.contains(itemId)) {
+        newLibrary.add(itemId);
+        return await updateUserProfile(library: newLibrary);
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> removeFromLibrary(int itemId) async {
+    try {
+      final token = await _authService.getToken();
+      if (token == null) return false;
+      
+      final currentUserId = await _authService.getCurrentUserId();
+      if (currentUserId == null) return false;
+      
+      final profile = await fetchUserProfile(currentUserId);
+      if (profile == null) return false;
+      
+      final newLibrary = List<int>.from(profile.library);
+      if (newLibrary.contains(itemId)) {
+        newLibrary.remove(itemId);
+        return await updateUserProfile(library: newLibrary);
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> checkLibraryStatus(int itemId) async {
+    try {
+      final token = await _authService.getToken();
+      if (token == null) return false;
+      
+      final currentUserId = await _authService.getCurrentUserId();
+      if (currentUserId == null) return false;
+      
+      final profile = await fetchUserProfile(currentUserId);
+      if (profile == null) return false;
+      
+      return profile.library.contains(itemId);
     } catch (e) {
       return false;
     }
@@ -435,6 +557,29 @@ class ApiService {
       return false;
     } catch (e) {
       return false;
+    }
+  }
+
+  // Fetch changelog since a specific timestamp
+  Future<Map<String, dynamic>> fetchChangelog(DateTime since) async {
+    try {
+      final sinceStr = since.toUtc().toIso8601String();
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/changelog?since=$sinceStr'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'changes': data['changes'] as List,
+          'count': data['count'] as int,
+          'hasMore': data['hasMore'] as bool,
+        };
+      }
+      throw Exception('Failed to fetch changelog: ${response.statusCode}');
+    } catch (e) {
+      throw Exception('Failed to fetch changelog: $e');
     }
   }
 

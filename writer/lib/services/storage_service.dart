@@ -85,6 +85,8 @@ class StorageService {
   // Base URL management
   static const _baseUrlKey = 'base_url';
   static const _defaultBaseUrl = 'https://pokily-unawaked-amado.ngrok-free.app';
+  static const _lastSyncServerKey = 'last_sync_server';
+  static const _serverInstanceIdKey = 'server_instance_id';
 
   Future<void> saveBaseUrl(String url) async {
     await _storage.write(key: _baseUrlKey, value: url);
@@ -97,6 +99,32 @@ class StorageService {
 
   Future<void> deleteBaseUrl() async {
     await _storage.delete(key: _baseUrlKey);
+  }
+  
+  // Track which server we last synced with
+  Future<void> saveLastSyncServer(String serverUrl) async {
+    await _storage.write(key: _lastSyncServerKey, value: serverUrl);
+  }
+  
+  Future<String?> getLastSyncServer() async {
+    return await _storage.read(key: _lastSyncServerKey);
+  }
+  
+  Future<void> deleteLastSyncServer() async {
+    await _storage.delete(key: _lastSyncServerKey);
+  }
+  
+  // Track server instance identity
+  Future<void> saveServerInstanceId(String instanceId) async {
+    await _storage.write(key: _serverInstanceIdKey, value: instanceId);
+  }
+  
+  Future<String?> getServerInstanceId() async {
+    return await _storage.read(key: _serverInstanceIdKey);
+  }
+  
+  Future<void> deleteServerInstanceId() async {
+    await _storage.delete(key: _serverInstanceIdKey);
   }
 
   // Pending deletions management (for offline delete sync)
@@ -127,5 +155,26 @@ class StorageService {
 
   Future<void> clearPendingDeletes() async {
     await _storage.delete(key: _pendingDeletesKey);
+  }
+
+  // Last sync timestamp management (for changelog-based sync)
+  static const _lastSyncTimestampKey = 'last_sync_timestamp';
+
+  Future<void> saveLastSyncTimestamp(DateTime timestamp) async {
+    await _storage.write(key: _lastSyncTimestampKey, value: timestamp.toIso8601String());
+  }
+
+  Future<DateTime?> getLastSyncTimestamp() async {
+    final timestampStr = await _storage.read(key: _lastSyncTimestampKey);
+    if (timestampStr == null) return null;
+    try {
+      return DateTime.parse(timestampStr);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> deleteLastSyncTimestamp() async {
+    await _storage.delete(key: _lastSyncTimestampKey);
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class UserProfile {
   final int id;
   final String name;
@@ -7,6 +9,7 @@ class UserProfile {
   final int followers;
   final int following;
   final int posts;
+  final List<int> library;
   final bool isFollowedByUser;
   final DateTime? createdAt;
 
@@ -19,6 +22,7 @@ class UserProfile {
     this.followers = 0,
     this.following = 0,
     this.posts = 0,
+    this.library = const [],
     this.isFollowedByUser = false,
     this.createdAt,
   });
@@ -32,6 +36,18 @@ class UserProfile {
       return false;
     }
 
+    List<int> parseLibrary(dynamic lib) {
+      if (lib == null) return [];
+      if (lib is List) return lib.map((e) => int.tryParse(e.toString()) ?? 0).where((e) => e != 0).toList();
+      if (lib is String) {
+        try {
+          final decoded = jsonDecode(lib);
+          if (decoded is List) return decoded.map((e) => int.tryParse(e.toString()) ?? 0).where((e) => e != 0).toList();
+        } catch (_) {}
+      }
+      return [];
+    }
+
     return UserProfile(
       id: json['id'] ?? 0,
       name: json['name'] ?? json['Name'] ?? '',
@@ -41,6 +57,7 @@ class UserProfile {
       followers: json['followers'] ?? 0,
       following: json['following'] ?? 0,
       posts: json['posts'] ?? 0,
+      library: parseLibrary(json['library']),
       isFollowedByUser: toBool(json['isFollowedByUser'] ?? json['is_followed_by_user']),
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
@@ -58,6 +75,7 @@ class UserProfile {
       'followers': followers,
       'following': following,
       'posts': posts,
+      'library': library,
       'isFollowedByUser': isFollowedByUser,
       'createdAt': createdAt?.toIso8601String(),
     };
@@ -74,6 +92,7 @@ class UserProfile {
       followers: entity.followers,
       following: entity.following,
       posts: entity.posts,
+      library: [], // Default to empty for now
       isFollowedByUser: false, // Drift entity doesn't have this yet
       createdAt: entity.createdAt,
     );
@@ -88,6 +107,7 @@ class UserProfile {
     int? followers,
     int? following,
     int? posts,
+    List<int>? library,
     bool? isFollowedByUser,
     DateTime? createdAt,
   }) {
@@ -100,6 +120,7 @@ class UserProfile {
       followers: followers ?? this.followers,
       following: following ?? this.following,
       posts: posts ?? this.posts,
+      library: library ?? this.library,
       isFollowedByUser: isFollowedByUser ?? this.isFollowedByUser,
       createdAt: createdAt ?? this.createdAt,
     );

@@ -18,7 +18,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   // Migration strategy
   @override
@@ -62,6 +62,16 @@ class AppDatabase extends _$AppDatabase {
         if (from < 7) {
           // Add userId column to sync_log for multi-user support
           await customStatement('ALTER TABLE sync_log ADD COLUMN user_id INTEGER');
+        }
+        if (from < 8) {
+          // Add timestamp tracking and change flags for manuscript sync
+          await customStatement('ALTER TABLE items ADD COLUMN updated_at INTEGER');
+          await customStatement('ALTER TABLE items ADD COLUMN has_changed INTEGER NOT NULL DEFAULT 0');
+          await customStatement('ALTER TABLE chapters ADD COLUMN updated_at INTEGER');
+          await customStatement('ALTER TABLE chapters ADD COLUMN has_changed INTEGER NOT NULL DEFAULT 0');
+          // Initialize updatedAt to createdAt for existing records
+          await customStatement('UPDATE items SET updated_at = created_at WHERE updated_at IS NULL');
+          await customStatement('UPDATE chapters SET updated_at = created_at WHERE updated_at IS NULL');
         }
       },
     );

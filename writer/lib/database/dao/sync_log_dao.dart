@@ -195,4 +195,34 @@ class SyncLogDao extends DatabaseAccessor<AppDatabase> with _$SyncLogDaoMixin {
   Future<void> updateEntityId(int logId, int newEntityId) =>
       (update(syncLog)..where((t) => t.id.equals(logId)))
           .write(SyncLogCompanion(entityId: Value(newEntityId)));
+  
+  // Check if there are pending operations for a specific item
+  Future<bool> hasPendingOperationsForItem(int itemId, {int? userId}) async {
+    final query = select(syncLog)
+      ..where((t) => 
+           (t.entityType.equals('item') & t.entityId.equals(itemId)) |
+           (t.entityType.equals('chapter') & t.parentId.equals(itemId)));
+    
+    if (userId != null) {
+      query.where((t) => t.userId.equals(userId));
+    }
+    
+    final result = await query.getSingleOrNull();
+    return result != null;
+  }
+  
+  // Get pending operations for a specific item
+  Future<List<SyncLogEntry>> getPendingOperationsForItem(int itemId, {int? userId}) async {
+    final query = select(syncLog)
+      ..where((t) => 
+           (t.entityType.equals('item') & t.entityId.equals(itemId)) |
+           (t.entityType.equals('chapter') & t.parentId.equals(itemId)))
+      ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]);
+    
+    if (userId != null) {
+      query.where((t) => t.userId.equals(userId));
+    }
+    
+    return query.get();
+  }
 }

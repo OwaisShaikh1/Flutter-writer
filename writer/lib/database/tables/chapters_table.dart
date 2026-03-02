@@ -6,12 +6,13 @@ class Chapters extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get itemId => integer().references(Items, #id, onDelete: KeyAction.cascade)();
   IntColumn get number => integer()();
-  TextColumn get title => text()();
-  TextColumn get content => text()();
+  TextColumn get title => text().withDefault(const Constant(''))();
+  TextColumn get content => text().withDefault(const Constant(''))();
   BoolColumn get isDownloaded => boolean().withDefault(const Constant(false))();
   DateTimeColumn get downloadedAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  BoolColumn get hasChanged => boolean().withDefault(const Constant(false))();
   @override
   List<Set<Column>> get uniqueKeys => [
         {itemId, number}, // Prevent duplicate chapters

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/literature_provider.dart';
-import '../providers/sync_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/sync_provider.dart';
 import '../widgets/header.dart';
 import '../widgets/search_bar.dart';
 import '../widgets/filter_section.dart';
@@ -22,104 +22,97 @@ class _DashboardState extends State<Dashboard> {
   @override
   void initState() {
     super.initState();
-    // Trigger initial sync when dashboard loads
+    // Load literature data when dashboard opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initialSync();
+      final literatureProvider = Provider.of<LiteratureProvider>(context, listen: false);
+      // Sync all items instead of just user's works
+      literatureProvider.syncWithBackend();
     });
-  }
-
-  Future<void> _initialSync() async {
-    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
-    if (syncProvider.isOnline) {
-      await syncProvider.syncAll();
-    }
   }
 
   Future<void> _handleRefresh() async {
     final literatureProvider = Provider.of<LiteratureProvider>(context, listen: false);
+    
+    // Sync all literature data from backend
     await literatureProvider.syncWithBackend();
-  }
-
-  void _showSyncMessage(BuildContext context, bool success, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: success ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          // Offline indicator at the top
-          const OfflineIndicator(),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Offline indicator at the top
+            const OfflineIndicator(),
           
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header with profile and logout
-                  _buildHeader(),
-                  const SizedBox(height: 12),
-                  
-                  // Search bar
-                  Consumer<LiteratureProvider>(
-                    builder: (context, provider, _) {
-                      return LiteratureSearchBar(
-                        onChanged: (value) => provider.setSearchQuery(value),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // Filter section
-                  Consumer<LiteratureProvider>(
-                    builder: (context, provider, _) {
-                      return FilterSection(
-                        selected: provider.selectedFilter,
-                        onSelect: (filter) => provider.setFilter(filter),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // Sync status and button
-                  _buildSyncSection(),
-                  const SizedBox(height: 12),
-                  
-                  // Literature list
-                  Expanded(
-                    child: Consumer<LiteratureProvider>(
-                      builder: (context, provider, _) {
-                        if (provider.isLoading) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        }
+            child: RefreshIndicator(
+              onRefresh: _handleRefresh,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height - 
+                         MediaQuery.of(context).padding.top - 
+                         kToolbarHeight - 100, // Account for offline indicator and padding
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header with profile and logout
+                        _buildHeader(),
+                        const SizedBox(height: 12),
                         
-                        if (provider.items.isEmpty) {
-                          return _buildEmptyState(provider);
-                        }
+                        // Search bar
+                        Consumer<LiteratureProvider>(
+                          builder: (context, provider, _) {
+                            return LiteratureSearchBar(
+                              onChanged: (value) => provider.setSearchQuery(value),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
                         
-                        return RefreshIndicator(
-                          onRefresh: _handleRefresh,
-                          child: LiteratureList(items: provider.items),
-                        );
-                      },
+                        // Filter section
+                        Consumer<LiteratureProvider>(
+                          builder: (context, provider, _) {
+                            return FilterSection(
+                              selected: provider.selectedFilter,
+                              onSelect: (filter) => provider.setFilter(filter),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        
+                        // Literature list
+                        Expanded(
+                          child: Consumer<LiteratureProvider>(
+                            builder: (context, provider, _) {
+                              if (provider.isLoading) {
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              }
+                              
+                              if (provider.items.isEmpty) {
+                                return _buildEmptyState(provider);
+                              }
+                              
+                              return LiteratureList(items: provider.items);
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
         ],
       ),
+    ),
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToCreateLiterature,
         tooltip: 'Write new work',
@@ -202,135 +195,57 @@ class _DashboardState extends State<Dashboard> {
     );
   }
 
-  Widget _buildSyncSection() {
-    return Consumer2<LiteratureProvider, SyncProvider>(
-      builder: (context, literature, sync, _) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Item count & Online Status
-            Row(
-              children: [
-                Text(
-                  '${literature.totalItems} works',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 4,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: sync.isOnline ? Colors.green : Colors.grey,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  sync.isOnline ? 'Online' : 'Offline',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                  ),
-                ),
-              ],
-            ),
-            
-            // Minimal Sync button
-            InkWell(
-              onTap: literature.isSyncing || sync.isSyncing
-                  ? null
-                  : () async {
-                      final result = await literature.syncWithBackend();
-                      if (context.mounted) {
-                        _showSyncMessage(
-                          context,
-                          result.success,
-                          result.message,
-                        );
-                      }
-                    },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  children: [
-                    if (literature.isSyncing || sync.isSyncing)
-                      const SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else
-                      Icon(Icons.sync, size: 14, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(width: 4),
-                    Text(
-                      literature.isSyncing || sync.isSyncing ? 'Syncing' : 'Sync',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ],
+  Widget _buildEmptyState(LiteratureProvider provider) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: 400, // Minimum height to allow pull-to-refresh
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.auto_stories_outlined,
+                size: 48,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All'
+                    ? 'No items found'
+                    : 'Your library is empty',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildEmptyState(LiteratureProvider provider) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.auto_stories_outlined,
-            size: 48,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+              const SizedBox(height: 8),
+              Text(
+                provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All'
+                    ? 'Try adjusting your search criteria or pull down to refresh'
+                    : 'Create your first work, pull down to refresh, or check Settings to sync with server',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                ),
+              ),
+              const SizedBox(height: 32),
+              if (provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All')
+                TextButton(
+                  onPressed: () => provider.clearFilters(),
+                  child: const Text('Clear all filters'),
+                )
+              else
+                TextButton.icon(
+                  onPressed: _navigateToCreateLiterature,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Create your first work'),
+                ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All'
-                ? 'No items found'
-                : 'Your library is empty',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All'
-                ? 'Try adjusting your search criteria'
-                : 'Sync to fetch your works from the server',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-            ),
-          ),
-          const SizedBox(height: 32),
-          if (provider.searchQuery.isNotEmpty || provider.selectedFilter != 'All')
-            TextButton(
-              onPressed: () => provider.clearFilters(),
-              child: const Text('Clear all filters'),
-            )
-          else
-            TextButton.icon(
-              onPressed: provider.isSyncing
-                  ? null
-                  : () => provider.syncWithBackend(),
-              icon: const Icon(Icons.sync, size: 18),
-              label: const Text('Sync now'),
-            ),
-        ],
+        ),
       ),
     );
   }

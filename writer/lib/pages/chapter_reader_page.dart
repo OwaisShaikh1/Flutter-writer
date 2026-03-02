@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../database/database.dart';
 import '../database/dao/chapters_dao.dart';
 import '../providers/sync_provider.dart';
+import '../services/sync_service.dart';
 import '../models/chapter.dart';
 import '../models/literature_item.dart';
 
@@ -36,31 +38,65 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
   }
 
   Future<void> _loadChapter() async {
+    print('📖 READER: _loadChapter called for chapter $_currentChapter of item ${widget.item.id}');
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
+      print('📖 READER: Getting chapter from local DB...');
       final entity = await _chaptersDao.getChapter(widget.item.id, _currentChapter);
+      print('📖 READER: Local entity: ${entity != null ? "found" : "null"}');
       
-      if (entity != null) {
+      if (entity != null && entity.isDownloaded) {
+        print('📖 READER: Chapter is downloaded, using local');
+        // Chapter exists and is up-to-date
         setState(() {
           _chapter = Chapter.fromEntity(entity);
           _isLoading = false;
         });
       } else {
-        // Try to download from server
-        final syncProvider = Provider.of<SyncProvider>(context, listen: false);
-        final success = await syncProvider.downloadChapter(widget.item.id, _currentChapter);
+        print('📖 READER: Chapter needs download from server');
+        // Chapter doesn't exist or needs update - download from server
+        final needsUpdate = entity != null && !entity.isDownloaded;
         
-        if (success) {
+        if (needsUpdate && mounted) {
+          // Show brief message that we're updating to latest version
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Updating to latest version...'),
+              duration: Duration(milliseconds: 800),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        
+        // Pull chapters from API
+        print('📖 READER: Creating SyncService...');
+        final db = Provider.of<AppDatabase>(context, listen: false);
+        final syncService = SyncService(db);
+        print('📖 READER: Calling pullChapters...');
+        final result = await syncService.pullChapters(widget.item.id);
+        print('📖 READER: pullChapters result: $result');
+        
+        if (result.success) {
           final downloaded = await _chaptersDao.getChapter(widget.item.id, _currentChapter);
           if (downloaded != null) {
             setState(() {
               _chapter = Chapter.fromEntity(downloaded);
               _isLoading = false;
             });
+            
+            if (needsUpdate && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('✓ Updated to latest version'),
+                  duration: Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
           } else {
             setState(() {
               _error = 'Failed to load chapter';
@@ -74,7 +110,9 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
           });
         }
       }
-    } catch (e) {
+    } catch (e, stack) {
+      print('📖 READER: ERROR loading chapter: $e');
+      print('📖 READER: Stack trace: $stack');
       setState(() {
         _error = 'Error loading chapter: $e';
         _isLoading = false;
@@ -120,37 +158,16 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
               );
             },
           ),
-          // Download icon
-          Consumer<SyncProvider>(
-            builder: (context, syncProvider, _) {
-              return IconButton(
-                icon: syncProvider.isSyncing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.download_rounded, size: 20),
-                tooltip: 'Download',
-                onPressed: syncProvider.isSyncing
-                    ? null
-                    : () async {
-                        final result = await syncProvider.downloadChapters(widget.item.id);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(result.message),
-                              behavior: SnackBarBehavior.floating,
-                              backgroundColor: result.success 
-                                  ? Theme.of(context).colorScheme.primary 
-                                  : Theme.of(context).colorScheme.error,
-                            ),
-                          );
-                          if (result.success) {
-                            _loadChapter();
-                          }
-                        }
-                      },
+          // Chapter options
+          IconButton(
+            icon: const Icon(Icons.settings_rounded, size: 20),
+            tooltip: 'Settings',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Use Settings to sync and download content'),
+                  behavior: SnackBarBehavior.floating,
+                ),
               );
             },
           ),
@@ -322,14 +339,32 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
           ),
           const SizedBox(height: 48),
           
-          // Chapter content
-          SelectableText(
-            _chapter!.content,
-            style: TextStyle(
-              height: 1.8,
-              fontSize: 17,
-              letterSpacing: 0.2,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+          // Chapter content rendered with Markdown
+          MarkdownBody(
+            data: _chapter!.content,
+            selectable: true,
+            styleSheet: MarkdownStyleSheet(
+              p: TextStyle(
+                height: 1.8,
+                fontSize: 17,
+                letterSpacing: 0.2,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+              ),
+              h1: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              h2: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              h3: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              blockquote: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontStyle: FontStyle.italic,
+              ),
+              blockquoteDecoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                    width: 4,
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 100), // Extra space at bottom

@@ -26,10 +26,12 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
   final ApiService _apiService = ApiService();
   UserProfile? _profile;
   List<LiteratureItem> _allWorks = [];
+  List<LiteratureItem> _libraryWorks = [];
   List<LiteratureItem> _filteredWorks = [];
   bool _isLoading = true;
   String _searchQuery = '';
   String _selectedFilter = 'All';
+  int _activeTab = 0; // 0 for Works, 1 for Library
 
   @override
   void initState() {
@@ -43,11 +45,21 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
       final profile = await _apiService.fetchUserProfile(widget.authorId);
       final works = await _apiService.fetchUserItems(widget.authorId);
       
+      List<LiteratureItem> library = [];
+      if (profile != null && profile.library.isNotEmpty) {
+        try {
+          library = await _apiService.fetchItemsByIds(profile.library);
+        } catch (e) {
+          debugPrint('Error fetching library items: $e');
+        }
+      }
+      
       if (mounted) {
         setState(() {
           _profile = profile;
           _allWorks = works;
-          _filteredWorks = works;
+          _libraryWorks = library;
+          _applyFilters();
           _isLoading = false;
         });
       }
@@ -62,8 +74,9 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
   }
 
   void _applyFilters() {
+    final relevantList = _activeTab == 0 ? _allWorks : _libraryWorks;
     setState(() {
-      _filteredWorks = _allWorks.where((work) {
+      _filteredWorks = relevantList.where((work) {
         final matchesSearch = work.title.toLowerCase().contains(_searchQuery.toLowerCase());
         final matchesFilter = _selectedFilter == 'All' || work.type == _selectedFilter;
         return matchesSearch && matchesFilter;
@@ -96,17 +109,14 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
         title: Text(
           (_profile?.name ?? widget.authorName).toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.5,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         centerTitle: true,
@@ -127,9 +137,9 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
                           _buildProfileHeader(),
                           const SizedBox(height: 32),
                           _buildProfileDescription(),
-                          const SizedBox(height: 32),
-                          _buildSectionHeader(context, 'Works'),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 40),
+                          _buildTabSwitcher(),
+                          const SizedBox(height: 20),
                           LiteratureSearchBar(
                             onChanged: (value) {
                               _searchQuery = value;
@@ -156,9 +166,9 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
                             child: Padding(
                               padding: const EdgeInsets.all(40.0),
                               child: Text(
-                                _allWorks.isEmpty
-                                    ? 'NO MANUSCRIPTS YET.'
-                                    : 'NO MATCHING RESULTS.',
+                                _activeTab == 0
+                                    ? (_allWorks.isEmpty ? 'NO MANUSCRIPTS YET.' : 'NO MATCHING RESULTS.')
+                                    : (_libraryWorks.isEmpty ? 'LIBRARY IS EMPTY.' : 'NO MATCHING RESULTS.'),
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
@@ -185,6 +195,80 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildTabSwitcher() {
+    return Row(
+      children: [
+        _buildTabItem(0, 'Works', _allWorks.length),
+        const SizedBox(width: 32),
+        _buildTabItem(1, 'Library', _profile?.library.length ?? 0),
+      ],
+    );
+  }
+
+  Widget _buildTabItem(int index, String label, int count) {
+    final isActive = _activeTab == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _activeTab = index;
+          _applyFilters();
+        });
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                  color: isActive
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                      : Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: isActive
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 2,
+            width: 20,
+            decoration: BoxDecoration(
+              color: isActive
+                  ? Theme.of(context).colorScheme.primary
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(1),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -215,10 +299,11 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
     final initials = displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : '?';
 
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 80,
-          height: 80,
+          width: 60,
+          height: 60,
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
             shape: BoxShape.circle,
@@ -227,42 +312,43 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
             child: Text(
               initials,
               style: TextStyle(
-                fontSize: 28,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
         ),
-        const SizedBox(width: 24),
+        const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 displayName,
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 '@${_profile?.username ?? widget.authorName.toLowerCase().replaceAll(' ', '')}',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
                   letterSpacing: 0.2,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   _buildStatItem('Works', _profile?.posts ?? _allWorks.length),
-                  const SizedBox(width: 24),
+                  const SizedBox(width: 20),
                   _buildStatItem('Followers', _profile?.followers ?? 0),
-                  const SizedBox(width: 24),
+                  const SizedBox(width: 20),
                   _buildStatItem('Following', _profile?.following ?? 0),
                 ],
               ),
@@ -305,7 +391,7 @@ class _AuthorProfilePageState extends State<AuthorProfilePage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildSectionHeader(context, 'About'),
+            Expanded(child: _buildSectionHeader(context, 'About')),
             const SizedBox(width: 12),
             TextButton(
               onPressed: _toggleFollow,
@@ -397,9 +483,9 @@ class _AuthorWorkCard extends StatelessWidget {
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          _buildTinyStat(context, Icons.star_rounded, '${item.rating}'),
+                          _buildTinyStat(context, Icons.star_rounded, '${item.rating}', Colors.amber),
                           const SizedBox(width: 16),
-                          _buildTinyStat(context, Icons.menu_book_rounded, '${item.chapters} chapters'),
+                          _buildTinyStat(context, Icons.menu_book_rounded, '${item.chapters} chapters', Colors.teal),
                         ],
                       ),
                     ],
@@ -423,11 +509,11 @@ class _AuthorWorkCard extends StatelessWidget {
     );
   }
 
-  Widget _buildTinyStat(BuildContext context, IconData icon, String value) {
+  Widget _buildTinyStat(BuildContext context, IconData icon, String value, Color color) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2)),
+        Icon(icon, size: 14, color: color.withOpacity(0.6)),
         const SizedBox(width: 4),
         Text(
           value,

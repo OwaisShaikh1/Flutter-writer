@@ -14,6 +14,8 @@ class LiteratureItem {
   final String description;
   final bool isFavorite;
   final bool isSynced;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   LiteratureItem({
     required this.id,
@@ -31,6 +33,8 @@ class LiteratureItem {
     required this.description,
     this.isFavorite = false,
     this.isSynced = false,
+    this.createdAt,
+    this.updatedAt,
   });
 
   factory LiteratureItem.fromJson(Map<String, dynamic> json) {
@@ -58,6 +62,12 @@ class LiteratureItem {
       description: json['description'] ?? '',
       isFavorite: toBool(json['isFavorite']),
       isSynced: toBool(json['isSynced']),
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.tryParse(json['updated_at'].toString())
+          : null,
     );
   }
 
@@ -99,6 +109,8 @@ class LiteratureItem {
       description: entity.description,
       isFavorite: entity.isFavorite,
       isSynced: entity.isSynced,
+      createdAt: entity.createdAt,
+      updatedAt: entity.updatedAt,
     );
   }
 
@@ -137,6 +149,8 @@ class LiteratureItem {
     String? description,
     bool? isFavorite,
     bool? isSynced,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return LiteratureItem(
       id: id ?? this.id,
@@ -154,6 +168,8 @@ class LiteratureItem {
       description: description ?? this.description,
       isFavorite: isFavorite ?? this.isFavorite,
       isSynced: isSynced ?? this.isSynced,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 

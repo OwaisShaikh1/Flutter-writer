@@ -4,9 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ThemeProvider with ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
   Color _customColor = const Color(0xFF000000); // Default Strictly Black
+  bool _isCardLayout = true; // Added for different layouts
   
   ThemeMode get themeMode => _themeMode;
   Color get customColor => _customColor;
+  bool get isCardLayout => _isCardLayout;
   
   bool get isDarkMode => _themeMode == ThemeMode.dark;
   
@@ -22,6 +24,9 @@ class ThemeProvider with ChangeNotifier {
     // Load custom color
     final colorValue = prefs.getInt('customColor') ?? 0xFF000000;
     _customColor = Color(colorValue);
+
+    // Load layout preference
+    _isCardLayout = prefs.getBool('isCardLayout') ?? true;
     
     notifyListeners();
   }
@@ -32,6 +37,14 @@ class ThemeProvider with ChangeNotifier {
     
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', themeMode == ThemeMode.dark);
+  }
+
+  Future<void> setLayout(bool isCard) async {
+    _isCardLayout = isCard;
+    notifyListeners();
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isCardLayout', isCard);
   }
   
   Future<void> setCustomColor(Color color) async {

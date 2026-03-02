@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:markdown_toolbar/markdown_toolbar.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 class AddChapterPage extends StatefulWidget {
   final int chapterNumber;
@@ -21,8 +23,11 @@ class AddChapterPage extends StatefulWidget {
 class _AddChapterPageState extends State<AddChapterPage> {
   late final TextEditingController _titleController;
   late final TextEditingController _contentController;
+  final FocusNode _contentFocusNode = FocusNode();
   final _formKey = GlobalKey<FormState>();
   int _wordCount = 0;
+  bool _isPreviewMode = false;
+  bool _showToolbar = true;
 
   @override
   void initState() {
@@ -45,6 +50,7 @@ class _AddChapterPageState extends State<AddChapterPage> {
   void dispose() {
     _titleController.dispose();
     _contentController.dispose();
+    _contentFocusNode.dispose();
     super.dispose();
   }
 
@@ -126,6 +132,33 @@ class _AddChapterPageState extends State<AddChapterPage> {
         ),
         centerTitle: true,
         actions: [
+          // Toggle preview/edit mode
+          IconButton(
+            onPressed: () {
+              setState(() {
+                _isPreviewMode = !_isPreviewMode;
+              });
+            },
+            icon: Icon(
+              _isPreviewMode ? Icons.edit_note_rounded : Icons.visibility_rounded,
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+            ),
+            tooltip: _isPreviewMode ? 'Switch to Edit' : 'Preview Markdown',
+          ),
+          // Toggle toolbar visibility (only in edit mode)
+          if (!_isPreviewMode)
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _showToolbar = !_showToolbar;
+                });
+              },
+              icon: Icon(
+                _showToolbar ? Icons.keyboard_hide_rounded : Icons.keyboard_rounded,
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+              ),
+              tooltip: _showToolbar ? 'Hide Toolbar' : 'Show Toolbar',
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: TextButton(
@@ -148,12 +181,12 @@ class _AddChapterPageState extends State<AddChapterPage> {
           children: [
             // Chapter title input (naked)
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
               child: TextFormField(
                 controller: _titleController,
                 textCapitalization: TextCapitalization.words,
                 style: const TextStyle(
-                  fontSize: 28,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.5,
                 ),
@@ -161,6 +194,7 @@ class _AddChapterPageState extends State<AddChapterPage> {
                   hintText: 'Chapter Title',
                   hintStyle: TextStyle(
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
+                    fontSize: 18,
                   ),
                   border: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -181,13 +215,13 @@ class _AddChapterPageState extends State<AddChapterPage> {
             
             // Subtle word count
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
                   Text(
                     '$_wordCount WORDS',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'monospace',
                       letterSpacing: 1,
@@ -198,42 +232,83 @@ class _AddChapterPageState extends State<AddChapterPage> {
               ),
             ),
 
-            const SizedBox(height: 24),
-            
-            // Main content area - naked text editor
+            const SizedBox(height: 16),
+
+                        // Markdown Toolbar (hidable)
+                        if (!_isPreviewMode && _showToolbar)
+                          MarkdownToolbar(
+                            useIncludedTextField: false,
+                            controller: _contentController,
+                            focusNode: _contentFocusNode,
+                            backgroundColor: Theme.of(context).colorScheme.surface,
+                            iconColor: Theme.of(context).colorScheme.primary,
+                          ),
+
+            // Main content area - naked text editor or Preview
             Expanded(
-              child: TextFormField(
-                controller: _contentController,
-                textCapitalization: TextCapitalization.sentences,
-                keyboardType: TextInputType.multiline,
-                maxLines: null,
-                expands: true,
-                textAlignVertical: TextAlignVertical.top,
-                style: TextStyle(
-                  height: 1.8,
-                  fontSize: 18,
-                  letterSpacing: 0.1,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Start writing your story...',
-                  hintStyle: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
-                  ),
-                  border: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  errorBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter chapter content';
-                  }
-                  return null;
-                },
-              ),
+              child: _isPreviewMode
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Markdown(
+                        data: _contentController.text,
+                        styleSheet: MarkdownStyleSheet(
+                          p: TextStyle(
+                            height: 1.6,
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+                          ),
+                          h1: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          h2: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          blockquote: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          blockquoteDecoration: BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                                width: 4,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : TextFormField(
+                      controller: _contentController,
+                      focusNode: _contentFocusNode,
+                      textCapitalization: TextCapitalization.sentences,
+                      keyboardType: TextInputType.multiline,
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: TextStyle(
+                        height: 1.6,
+                        fontSize: 14,
+                        letterSpacing: 0.1,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Start writing your story...',
+                        hintStyle: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
+                          fontSize: 13,
+                        ),
+                        border: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter chapter content';
+                        }
+                        return null;
+                      },
+                    ),
             ),
           ],
         ),

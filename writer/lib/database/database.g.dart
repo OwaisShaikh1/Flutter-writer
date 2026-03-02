@@ -750,6 +750,33 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemEntity> {
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _hasChangedMeta = const VerificationMeta(
+    'hasChanged',
+  );
+  @override
+  late final GeneratedColumn<bool> hasChanged = GeneratedColumn<bool>(
+    'has_changed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("has_changed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -770,6 +797,8 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemEntity> {
     isSynced,
     lastSyncedAt,
     createdAt,
+    updatedAt,
+    hasChanged,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -914,6 +943,18 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemEntity> {
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('has_changed')) {
+      context.handle(
+        _hasChangedMeta,
+        hasChanged.isAcceptableOrUnknown(data['has_changed']!, _hasChangedMeta),
+      );
+    }
     return context;
   }
 
@@ -995,6 +1036,14 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemEntity> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      hasChanged: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}has_changed'],
+      )!,
     );
   }
 
@@ -1023,6 +1072,8 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
   final bool isSynced;
   final DateTime? lastSyncedAt;
   final DateTime createdAt;
+  final DateTime updatedAt;
+  final bool hasChanged;
   const ItemEntity({
     required this.id,
     this.serverId,
@@ -1042,6 +1093,8 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
     required this.isSynced,
     this.lastSyncedAt,
     required this.createdAt,
+    required this.updatedAt,
+    required this.hasChanged,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1074,6 +1127,8 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
       map['last_synced_at'] = Variable<DateTime>(lastSyncedAt);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['has_changed'] = Variable<bool>(hasChanged);
     return map;
   }
 
@@ -1107,6 +1162,8 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
           ? const Value.absent()
           : Value(lastSyncedAt),
       createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      hasChanged: Value(hasChanged),
     );
   }
 
@@ -1134,6 +1191,8 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
       isSynced: serializer.fromJson<bool>(json['isSynced']),
       lastSyncedAt: serializer.fromJson<DateTime?>(json['lastSyncedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      hasChanged: serializer.fromJson<bool>(json['hasChanged']),
     );
   }
   @override
@@ -1158,6 +1217,8 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
       'isSynced': serializer.toJson<bool>(isSynced),
       'lastSyncedAt': serializer.toJson<DateTime?>(lastSyncedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'hasChanged': serializer.toJson<bool>(hasChanged),
     };
   }
 
@@ -1180,6 +1241,8 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
     bool? isSynced,
     Value<DateTime?> lastSyncedAt = const Value.absent(),
     DateTime? createdAt,
+    DateTime? updatedAt,
+    bool? hasChanged,
   }) => ItemEntity(
     id: id ?? this.id,
     serverId: serverId.present ? serverId.value : this.serverId,
@@ -1201,6 +1264,8 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
     isSynced: isSynced ?? this.isSynced,
     lastSyncedAt: lastSyncedAt.present ? lastSyncedAt.value : this.lastSyncedAt,
     createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    hasChanged: hasChanged ?? this.hasChanged,
   );
   ItemEntity copyWithCompanion(ItemsCompanion data) {
     return ItemEntity(
@@ -1238,6 +1303,10 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
           ? data.lastSyncedAt.value
           : this.lastSyncedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      hasChanged: data.hasChanged.present
+          ? data.hasChanged.value
+          : this.hasChanged,
     );
   }
 
@@ -1261,7 +1330,9 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
           ..write('isFavorite: $isFavorite, ')
           ..write('isSynced: $isSynced, ')
           ..write('lastSyncedAt: $lastSyncedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('hasChanged: $hasChanged')
           ..write(')'))
         .toString();
   }
@@ -1286,6 +1357,8 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
     isSynced,
     lastSyncedAt,
     createdAt,
+    updatedAt,
+    hasChanged,
   );
   @override
   bool operator ==(Object other) =>
@@ -1308,7 +1381,9 @@ class ItemEntity extends DataClass implements Insertable<ItemEntity> {
           other.isFavorite == this.isFavorite &&
           other.isSynced == this.isSynced &&
           other.lastSyncedAt == this.lastSyncedAt &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.hasChanged == this.hasChanged);
 }
 
 class ItemsCompanion extends UpdateCompanion<ItemEntity> {
@@ -1330,6 +1405,8 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
   final Value<bool> isSynced;
   final Value<DateTime?> lastSyncedAt;
   final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<bool> hasChanged;
   const ItemsCompanion({
     this.id = const Value.absent(),
     this.serverId = const Value.absent(),
@@ -1349,6 +1426,8 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
     this.isSynced = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.hasChanged = const Value.absent(),
   });
   ItemsCompanion.insert({
     this.id = const Value.absent(),
@@ -1369,6 +1448,8 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
     this.isSynced = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.hasChanged = const Value.absent(),
   }) : name = Value(name),
        author = Value(author),
        type = Value(type),
@@ -1392,6 +1473,8 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
     Expression<bool>? isSynced,
     Expression<DateTime>? lastSyncedAt,
     Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<bool>? hasChanged,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1412,6 +1495,8 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
       if (isSynced != null) 'is_synced': isSynced,
       if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (hasChanged != null) 'has_changed': hasChanged,
     });
   }
 
@@ -1434,6 +1519,8 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
     Value<bool>? isSynced,
     Value<DateTime?>? lastSyncedAt,
     Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<bool>? hasChanged,
   }) {
     return ItemsCompanion(
       id: id ?? this.id,
@@ -1454,6 +1541,8 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
       isSynced: isSynced ?? this.isSynced,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      hasChanged: hasChanged ?? this.hasChanged,
     );
   }
 
@@ -1514,6 +1603,12 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (hasChanged.present) {
+      map['has_changed'] = Variable<bool>(hasChanged.value);
+    }
     return map;
   }
 
@@ -1537,7 +1632,9 @@ class ItemsCompanion extends UpdateCompanion<ItemEntity> {
           ..write('isFavorite: $isFavorite, ')
           ..write('isSynced: $isSynced, ')
           ..write('lastSyncedAt: $lastSyncedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('hasChanged: $hasChanged')
           ..write(')'))
         .toString();
   }
@@ -1590,7 +1687,8 @@ class $ChaptersTable extends Chapters
     aliasedName,
     false,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
   );
   static const VerificationMeta _contentMeta = const VerificationMeta(
     'content',
@@ -1601,7 +1699,8 @@ class $ChaptersTable extends Chapters
     aliasedName,
     false,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
   );
   static const VerificationMeta _isDownloadedMeta = const VerificationMeta(
     'isDownloaded',
@@ -1641,6 +1740,33 @@ class $ChaptersTable extends Chapters
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _hasChangedMeta = const VerificationMeta(
+    'hasChanged',
+  );
+  @override
+  late final GeneratedColumn<bool> hasChanged = GeneratedColumn<bool>(
+    'has_changed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("has_changed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1651,6 +1777,8 @@ class $ChaptersTable extends Chapters
     isDownloaded,
     downloadedAt,
     createdAt,
+    updatedAt,
+    hasChanged,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1688,16 +1816,12 @@ class $ChaptersTable extends Chapters
         _titleMeta,
         title.isAcceptableOrUnknown(data['title']!, _titleMeta),
       );
-    } else if (isInserting) {
-      context.missing(_titleMeta);
     }
     if (data.containsKey('content')) {
       context.handle(
         _contentMeta,
         content.isAcceptableOrUnknown(data['content']!, _contentMeta),
       );
-    } else if (isInserting) {
-      context.missing(_contentMeta);
     }
     if (data.containsKey('is_downloaded')) {
       context.handle(
@@ -1721,6 +1845,18 @@ class $ChaptersTable extends Chapters
       context.handle(
         _createdAtMeta,
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('has_changed')) {
+      context.handle(
+        _hasChangedMeta,
+        hasChanged.isAcceptableOrUnknown(data['has_changed']!, _hasChangedMeta),
       );
     }
     return context;
@@ -1768,6 +1904,14 @@ class $ChaptersTable extends Chapters
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      hasChanged: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}has_changed'],
+      )!,
     );
   }
 
@@ -1786,6 +1930,8 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
   final bool isDownloaded;
   final DateTime? downloadedAt;
   final DateTime createdAt;
+  final DateTime updatedAt;
+  final bool hasChanged;
   const ChapterEntity({
     required this.id,
     required this.itemId,
@@ -1795,6 +1941,8 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
     required this.isDownloaded,
     this.downloadedAt,
     required this.createdAt,
+    required this.updatedAt,
+    required this.hasChanged,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1809,6 +1957,8 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
       map['downloaded_at'] = Variable<DateTime>(downloadedAt);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['has_changed'] = Variable<bool>(hasChanged);
     return map;
   }
 
@@ -1824,6 +1974,8 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
           ? const Value.absent()
           : Value(downloadedAt),
       createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      hasChanged: Value(hasChanged),
     );
   }
 
@@ -1841,6 +1993,8 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
       isDownloaded: serializer.fromJson<bool>(json['isDownloaded']),
       downloadedAt: serializer.fromJson<DateTime?>(json['downloadedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      hasChanged: serializer.fromJson<bool>(json['hasChanged']),
     );
   }
   @override
@@ -1855,6 +2009,8 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
       'isDownloaded': serializer.toJson<bool>(isDownloaded),
       'downloadedAt': serializer.toJson<DateTime?>(downloadedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'hasChanged': serializer.toJson<bool>(hasChanged),
     };
   }
 
@@ -1867,6 +2023,8 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
     bool? isDownloaded,
     Value<DateTime?> downloadedAt = const Value.absent(),
     DateTime? createdAt,
+    DateTime? updatedAt,
+    bool? hasChanged,
   }) => ChapterEntity(
     id: id ?? this.id,
     itemId: itemId ?? this.itemId,
@@ -1876,6 +2034,8 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
     isDownloaded: isDownloaded ?? this.isDownloaded,
     downloadedAt: downloadedAt.present ? downloadedAt.value : this.downloadedAt,
     createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    hasChanged: hasChanged ?? this.hasChanged,
   );
   ChapterEntity copyWithCompanion(ChaptersCompanion data) {
     return ChapterEntity(
@@ -1891,6 +2051,10 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
           ? data.downloadedAt.value
           : this.downloadedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      hasChanged: data.hasChanged.present
+          ? data.hasChanged.value
+          : this.hasChanged,
     );
   }
 
@@ -1904,7 +2068,9 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
           ..write('content: $content, ')
           ..write('isDownloaded: $isDownloaded, ')
           ..write('downloadedAt: $downloadedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('hasChanged: $hasChanged')
           ..write(')'))
         .toString();
   }
@@ -1919,6 +2085,8 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
     isDownloaded,
     downloadedAt,
     createdAt,
+    updatedAt,
+    hasChanged,
   );
   @override
   bool operator ==(Object other) =>
@@ -1931,7 +2099,9 @@ class ChapterEntity extends DataClass implements Insertable<ChapterEntity> {
           other.content == this.content &&
           other.isDownloaded == this.isDownloaded &&
           other.downloadedAt == this.downloadedAt &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.hasChanged == this.hasChanged);
 }
 
 class ChaptersCompanion extends UpdateCompanion<ChapterEntity> {
@@ -1943,6 +2113,8 @@ class ChaptersCompanion extends UpdateCompanion<ChapterEntity> {
   final Value<bool> isDownloaded;
   final Value<DateTime?> downloadedAt;
   final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<bool> hasChanged;
   const ChaptersCompanion({
     this.id = const Value.absent(),
     this.itemId = const Value.absent(),
@@ -1952,20 +2124,22 @@ class ChaptersCompanion extends UpdateCompanion<ChapterEntity> {
     this.isDownloaded = const Value.absent(),
     this.downloadedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.hasChanged = const Value.absent(),
   });
   ChaptersCompanion.insert({
     this.id = const Value.absent(),
     required int itemId,
     required int number,
-    required String title,
-    required String content,
+    this.title = const Value.absent(),
+    this.content = const Value.absent(),
     this.isDownloaded = const Value.absent(),
     this.downloadedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.hasChanged = const Value.absent(),
   }) : itemId = Value(itemId),
-       number = Value(number),
-       title = Value(title),
-       content = Value(content);
+       number = Value(number);
   static Insertable<ChapterEntity> custom({
     Expression<int>? id,
     Expression<int>? itemId,
@@ -1975,6 +2149,8 @@ class ChaptersCompanion extends UpdateCompanion<ChapterEntity> {
     Expression<bool>? isDownloaded,
     Expression<DateTime>? downloadedAt,
     Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<bool>? hasChanged,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1985,6 +2161,8 @@ class ChaptersCompanion extends UpdateCompanion<ChapterEntity> {
       if (isDownloaded != null) 'is_downloaded': isDownloaded,
       if (downloadedAt != null) 'downloaded_at': downloadedAt,
       if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (hasChanged != null) 'has_changed': hasChanged,
     });
   }
 
@@ -1997,6 +2175,8 @@ class ChaptersCompanion extends UpdateCompanion<ChapterEntity> {
     Value<bool>? isDownloaded,
     Value<DateTime?>? downloadedAt,
     Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<bool>? hasChanged,
   }) {
     return ChaptersCompanion(
       id: id ?? this.id,
@@ -2007,6 +2187,8 @@ class ChaptersCompanion extends UpdateCompanion<ChapterEntity> {
       isDownloaded: isDownloaded ?? this.isDownloaded,
       downloadedAt: downloadedAt ?? this.downloadedAt,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      hasChanged: hasChanged ?? this.hasChanged,
     );
   }
 
@@ -2037,6 +2219,12 @@ class ChaptersCompanion extends UpdateCompanion<ChapterEntity> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (hasChanged.present) {
+      map['has_changed'] = Variable<bool>(hasChanged.value);
+    }
     return map;
   }
 
@@ -2050,7 +2238,9 @@ class ChaptersCompanion extends UpdateCompanion<ChapterEntity> {
           ..write('content: $content, ')
           ..write('isDownloaded: $isDownloaded, ')
           ..write('downloadedAt: $downloadedAt, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('hasChanged: $hasChanged')
           ..write(')'))
         .toString();
   }
@@ -4006,6 +4196,8 @@ typedef $$ItemsTableCreateCompanionBuilder =
       Value<bool> isSynced,
       Value<DateTime?> lastSyncedAt,
       Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<bool> hasChanged,
     });
 typedef $$ItemsTableUpdateCompanionBuilder =
     ItemsCompanion Function({
@@ -4027,6 +4219,8 @@ typedef $$ItemsTableUpdateCompanionBuilder =
       Value<bool> isSynced,
       Value<DateTime?> lastSyncedAt,
       Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<bool> hasChanged,
     });
 
 final class $$ItemsTableReferences
@@ -4165,6 +4359,16 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hasChanged => $composableBuilder(
+    column: $table.hasChanged,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4317,6 +4521,16 @@ class $$ItemsTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get hasChanged => $composableBuilder(
+    column: $table.hasChanged,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ItemsTableAnnotationComposer
@@ -4397,6 +4611,14 @@ class $$ItemsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get hasChanged => $composableBuilder(
+    column: $table.hasChanged,
+    builder: (column) => column,
+  );
 
   Expression<T> chaptersRefs<T extends Object>(
     Expression<T> Function($$ChaptersTableAnnotationComposer a) f,
@@ -4495,6 +4717,8 @@ class $$ItemsTableTableManager
                 Value<bool> isSynced = const Value.absent(),
                 Value<DateTime?> lastSyncedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<bool> hasChanged = const Value.absent(),
               }) => ItemsCompanion(
                 id: id,
                 serverId: serverId,
@@ -4514,6 +4738,8 @@ class $$ItemsTableTableManager
                 isSynced: isSynced,
                 lastSyncedAt: lastSyncedAt,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                hasChanged: hasChanged,
               ),
           createCompanionCallback:
               ({
@@ -4535,6 +4761,8 @@ class $$ItemsTableTableManager
                 Value<bool> isSynced = const Value.absent(),
                 Value<DateTime?> lastSyncedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<bool> hasChanged = const Value.absent(),
               }) => ItemsCompanion.insert(
                 id: id,
                 serverId: serverId,
@@ -4554,6 +4782,8 @@ class $$ItemsTableTableManager
                 isSynced: isSynced,
                 lastSyncedAt: lastSyncedAt,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                hasChanged: hasChanged,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -4641,11 +4871,13 @@ typedef $$ChaptersTableCreateCompanionBuilder =
       Value<int> id,
       required int itemId,
       required int number,
-      required String title,
-      required String content,
+      Value<String> title,
+      Value<String> content,
       Value<bool> isDownloaded,
       Value<DateTime?> downloadedAt,
       Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<bool> hasChanged,
     });
 typedef $$ChaptersTableUpdateCompanionBuilder =
     ChaptersCompanion Function({
@@ -4657,6 +4889,8 @@ typedef $$ChaptersTableUpdateCompanionBuilder =
       Value<bool> isDownloaded,
       Value<DateTime?> downloadedAt,
       Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<bool> hasChanged,
     });
 
 final class $$ChaptersTableReferences
@@ -4723,6 +4957,16 @@ class $$ChaptersTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hasChanged => $composableBuilder(
+    column: $table.hasChanged,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4794,6 +5038,16 @@ class $$ChaptersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get hasChanged => $composableBuilder(
+    column: $table.hasChanged,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ItemsTableOrderingComposer get itemId {
     final $$ItemsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -4851,6 +5105,14 @@ class $$ChaptersTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get hasChanged => $composableBuilder(
+    column: $table.hasChanged,
+    builder: (column) => column,
+  );
 
   $$ItemsTableAnnotationComposer get itemId {
     final $$ItemsTableAnnotationComposer composer = $composerBuilder(
@@ -4912,6 +5174,8 @@ class $$ChaptersTableTableManager
                 Value<bool> isDownloaded = const Value.absent(),
                 Value<DateTime?> downloadedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<bool> hasChanged = const Value.absent(),
               }) => ChaptersCompanion(
                 id: id,
                 itemId: itemId,
@@ -4921,17 +5185,21 @@ class $$ChaptersTableTableManager
                 isDownloaded: isDownloaded,
                 downloadedAt: downloadedAt,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                hasChanged: hasChanged,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
                 required int itemId,
                 required int number,
-                required String title,
-                required String content,
+                Value<String> title = const Value.absent(),
+                Value<String> content = const Value.absent(),
                 Value<bool> isDownloaded = const Value.absent(),
                 Value<DateTime?> downloadedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<bool> hasChanged = const Value.absent(),
               }) => ChaptersCompanion.insert(
                 id: id,
                 itemId: itemId,
@@ -4941,6 +5209,8 @@ class $$ChaptersTableTableManager
                 isDownloaded: isDownloaded,
                 downloadedAt: downloadedAt,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
+                hasChanged: hasChanged,
               ),
           withReferenceMapper: (p0) => p0
               .map(

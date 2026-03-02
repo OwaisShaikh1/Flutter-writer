@@ -8,6 +8,7 @@ import '../pages/introduction_page.dart';
 import '../pages/author_profile_page.dart';
 import '../utils/constants.dart';
 import '../theme/app_theme.dart';
+import '../providers/theme_provider.dart';
 
 class LiteratureList extends StatelessWidget {
   final List<LiteratureItem> items;
@@ -16,16 +17,124 @@ class LiteratureList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      itemCount: items.length,
-      separatorBuilder: (context, index) => Divider(
-        height: 1,
-        thickness: 0.5,
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+    final isCardLayout = Provider.of<ThemeProvider>(context).isCardLayout;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: isCardLayout
+          ? GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.68,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              itemCount: items.length,
+              shrinkWrap: true,
+              physics: const ClampingScrollPhysics(),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return _LiteratureCard(item: item);
+              },
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              itemCount: items.length,
+              shrinkWrap: true,
+              physics: const ClampingScrollPhysics(),
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return _LiteratureListTile(item: item);
+              },
+            ),
+    );
+  }
+}
+
+class _LiteratureListTile extends StatelessWidget {
+  final LiteratureItem item;
+
+  const _LiteratureListTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 50,
+          height: 70,
+          child: _LiteratureCard(item: item)._buildImage(context, width: 50, height: 70),
+        ),
       ),
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return _LiteratureCard(item: item);
+      title: Text(
+        item.title,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.person, size: 14, color: Colors.grey),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  item.author,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+              const SizedBox(width: 4),
+              Text(
+                item.rating.toStringAsFixed(1),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 12),
+              Icon(
+                item.isLikedByUser ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                size: 14,
+                color: item.isLikedByUser ? Colors.red : Colors.grey.withOpacity(0.4),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${item.likes}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+        ],
+      ),
+      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => IntroductionPage(
+              literatureItem: item.toMap(),
+            ),
+          ),
+        );
+        if (context.mounted) {
+          Provider.of<LiteratureProvider>(context, listen: false)
+              .refreshItemData(item.id);
+        }
       },
     );
   }
@@ -48,102 +157,90 @@ class _LiteratureCard extends StatelessWidget {
             ),
           ),
         );
-        // Refresh item data when returning from detail page
         if (context.mounted) {
           Provider.of<LiteratureProvider>(context, listen: false)
               .refreshItemData(item.id);
         }
       },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Title
-                  Text(
-                    item.title.toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                
-                  // Author & Type row
-                  Row(
+            Flexible(
+              flex: 3,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: AspectRatio(
+                  aspectRatio: 3/4,
+                  child: _buildImage(context, width: double.infinity, height: null),
+                ),
+              ),
+            ),
+            Flexible(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: SingleChildScrollView(
+                  physics: NeverScrollableScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      GestureDetector(
-                        onTap: () {
-                          if (item.authorId != null) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => AuthorProfilePage(
-                                  authorId: item.authorId!,
-                                  authorName: item.author,
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                        child: Text(
-                          item.author,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
                       Text(
-                        item.type.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 9,
+                        item.title,
+                        style: const TextStyle(
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.6),
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.person, size: 13, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              item.author,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildMiniStat(Icons.star_rounded, item.rating.toStringAsFixed(1), color: Colors.amber),
+                          _buildMiniStat(
+                            item.isLikedByUser ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            '${item.likes}',
+                            color: item.isLikedByUser ? Colors.red : Colors.grey.withOpacity(0.4),
+                          ),
+                          _buildMiniStat(Icons.menu_book_rounded, '${item.chapters}', color: Colors.teal),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-
-                  // Stats row - minimal
-                  Consumer<LiteratureProvider>(
-                    builder: (context, provider, _) {
-                      final currentItem = provider.getItemById(item.id) ?? item;
-                      return Row(
-                        children: [
-                          _buildMiniStat(Icons.star_rounded, currentItem.rating.toStringAsFixed(1)),
-                          const SizedBox(width: 16),
-                          _buildMiniStat(
-                            currentItem.isLikedByUser ? Icons.favorite_rounded : Icons.favorite_border_rounded, 
-                            '${currentItem.likes}',
-                            onTap: () => provider.toggleLike(item.id),
-                            color: currentItem.isLikedByUser ? Colors.red : null,
-                          ),
-                          const SizedBox(width: 16),
-                          _buildMiniStat(Icons.menu_book_rounded, '${currentItem.chapters}'),
-                        ],
-                      );
-                    },
-                  ),
-                ],
+                ),
               ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 14,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.1),
             ),
           ],
         ),
@@ -172,42 +269,33 @@ class _LiteratureCard extends StatelessWidget {
     );
   }
 
-  Widget _buildImage(BuildContext context) {
+  Widget _buildImage(BuildContext context, {double? width, double? height}) {
     // Check for local image first
     if (item.imageLocalPath != null) {
       final file = File(item.imageLocalPath!);
       if (file.existsSync()) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.file(
-            file,
-            width: 64,
-            height: 84,
-            fit: BoxFit.cover,
-          ),
+        return Image.file(
+          file,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
         );
       }
     }
-
     // Check for network image
     if (item.imageUrl != null && item.imageUrl!.isNotEmpty) {
       final imageUrl = item.imageUrl!.startsWith('http')
           ? item.imageUrl!
           : '${ApiConstants.baseUrl}/${item.imageUrl}';
-      
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: CachedNetworkImage(
-          imageUrl: imageUrl,
-          width: 64,
-          height: 84,
-          fit: BoxFit.cover,
-          placeholder: (ctx, url) => _buildPlaceholder(ctx),
-          errorWidget: (ctx, url, error) => _buildPlaceholder(ctx),
-        ),
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        placeholder: (ctx, url) => _buildPlaceholder(ctx),
+        errorWidget: (ctx, url, error) => _buildPlaceholder(ctx),
       );
     }
-
     return _buildPlaceholder(context);
   }
 
@@ -235,8 +323,12 @@ class _LiteratureCard extends StatelessWidget {
         return AppColors.poetry;
       case 'novel':
         return AppColors.novel;
-      case 'article':
+      case 'short story':
+        return AppColors.drama;
+      case 'essay':
         return AppColors.article;
+      case 'biography':
+        return AppColors.other;
       default:
         return AppColors.other;
     }
@@ -250,40 +342,14 @@ class _LiteratureCard extends StatelessWidget {
         return Icons.format_quote;
       case 'novel':
         return Icons.auto_stories;
-      case 'article':
+      case 'short story':
+        return Icons.short_text;
+      case 'essay':
         return Icons.article;
+      case 'biography':
+        return Icons.person_outline;
       default:
         return Icons.book;
     }
   }
 }
-
-  Color _getTypeColor(String type, BuildContext context) {
-    switch (type.toLowerCase()) {
-      case 'drama':
-        return AppColors.drama;
-      case 'poetry':
-        return AppColors.poetry;
-      case 'novel':
-        return AppColors.novel;
-      case 'article':
-        return AppColors.article;
-      default:
-        return AppColors.other;
-    }
-  }
-
-  IconData _getTypeIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'drama':
-        return Icons.theater_comedy;
-      case 'poetry':
-        return Icons.format_quote;
-      case 'novel':
-        return Icons.auto_stories;
-      case 'article':
-        return Icons.article;
-      default:
-        return Icons.book;
-    }
-  }
