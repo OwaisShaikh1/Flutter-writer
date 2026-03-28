@@ -73,13 +73,16 @@ class _RegisterPageState extends State<RegisterPage> {
         title: const Text('Create Account'),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                 // Title
                 Text(
                   'Join Literature Dashboard',
@@ -284,7 +287,9 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                   ],
                 ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),

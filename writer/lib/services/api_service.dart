@@ -22,6 +22,7 @@ class ApiException implements Exception {
 
 class ApiService {
   final AuthService _authService = AuthService();
+  static const Duration _requestTimeout = Duration(seconds: 6);
 
   // Get authorization headers
   Future<Map<String, String>> _getHeaders() async {
@@ -64,7 +65,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('${ApiConstants.baseUrl}/items/$id'),
         headers: await _getHeaders(),
-      );
+      ).timeout(_requestTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -85,7 +86,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('${ApiConstants.baseUrl}/items/$id'),
         headers: await _getHeaders(),
-      );
+      ).timeout(_requestTimeout);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -145,7 +146,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('${ApiConstants.baseUrl}/chapters?bookId=$itemId'),
         headers: await _getHeaders(),
-      );
+      ).timeout(_requestTimeout);
 
       print('📡 API: Response status: ${response.statusCode}');
       print('📡 API: Response body: ${response.body}');
@@ -172,7 +173,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('${ApiConstants.baseUrl}/chapters?bookId=$itemId&metadataOnly=true'),
         headers: await _getHeaders(),
-      );
+      ).timeout(_requestTimeout);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -194,7 +195,7 @@ class ApiService {
       final response = await http.get(
         Uri.parse('${ApiConstants.baseUrl}/chapters?bookId=$bookId&chapterNumber=$chapterNumber'),
         headers: await _getHeaders(),
-      );
+      ).timeout(_requestTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -359,6 +360,7 @@ class ApiService {
     required String description,
     double review = 0,
     String? imageUrl,
+    String? clientRequestId,
   }) async {
     try {
       final response = await http.post(
@@ -370,10 +372,11 @@ class ApiService {
           'description': description,
           'review': review,
           'imageUrl': imageUrl,
+          if (clientRequestId != null) 'clientRequestId': clientRequestId,
         }),
-      );
+      ).timeout(_requestTimeout);
 
-      if (response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['itemId'] as int?;
       }
@@ -393,7 +396,7 @@ class ApiService {
           'itemId': itemId,
           'chapters': chapters,
         }),
-      );
+      ).timeout(_requestTimeout);
       return response.statusCode == 201;
     } catch (e) {
       throw Exception('Failed to create chapters: $e');
@@ -426,7 +429,7 @@ class ApiService {
         Uri.parse('${ApiConstants.baseUrl}/items/$itemId'),
         headers: await _getHeaders(),
         body: body,
-      );
+      ).timeout(_requestTimeout);
       
       if (response.statusCode == 200) {
         print('✅ API: Successfully updated item $itemId');
@@ -450,7 +453,11 @@ class ApiService {
         body: jsonEncode({
           'chapters': chapters,
         }),
-      );
+      ).timeout(_requestTimeout);
+      if (response.statusCode != 200) {
+        print('❌ API: updateChapters failed for item $itemId - '
+            'Status: ${response.statusCode}, Response: ${response.body}');
+      }
       return response.statusCode == 200;
     } catch (e) {
       throw Exception('Failed to update chapters: $e');
@@ -464,7 +471,11 @@ class ApiService {
         Uri.parse('${ApiConstants.baseUrl}/chapters/$itemId/$chapterNumber'),
         headers: await _getHeaders(),
         body: jsonEncode(data),
-      );
+      ).timeout(_requestTimeout);
+      if (response.statusCode != 200) {
+        print('❌ API: updateChapter failed for item $itemId chapter $chapterNumber - '
+            'Status: ${response.statusCode}, Response: ${response.body}');
+      }
       return response.statusCode == 200;
     } catch (e) {
       throw Exception('Failed to update chapter: $e');
@@ -477,7 +488,7 @@ class ApiService {
       final response = await http.delete(
         Uri.parse('${ApiConstants.baseUrl}/chapters/$itemId/$chapterNumber'),
         headers: await _getHeaders(),
-      );
+      ).timeout(_requestTimeout);
       return response.statusCode == 200;
     } catch (e) {
       throw Exception('Failed to delete chapter: $e');
@@ -490,7 +501,7 @@ class ApiService {
       final response = await http.delete(
         Uri.parse('${ApiConstants.baseUrl}/items/$itemId'),
         headers: await _getHeaders(),
-      );
+      ).timeout(_requestTimeout);
       return response.statusCode == 200;
     } catch (e) {
       throw Exception('Failed to delete item: $e');

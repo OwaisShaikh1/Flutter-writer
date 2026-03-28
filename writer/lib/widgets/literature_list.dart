@@ -22,20 +22,33 @@ class LiteratureList extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: isCardLayout
-          ? GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.68,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              itemCount: items.length,
-              shrinkWrap: true,
-              physics: const ClampingScrollPhysics(),
-              itemBuilder: (context, index) {
-                final item = items[index];
-                return _LiteratureCard(item: item);
+          ? LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+
+                // Simple responsive grid for web/desktop.
+                final crossAxisCount = width >= 1000
+                    ? 4
+                    : width >= 700
+                        ? 3
+                        : 2;
+
+                return GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: 0.68,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  itemCount: items.length,
+                  shrinkWrap: true,
+                  physics: const ClampingScrollPhysics(),
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return _LiteratureCard(item: item);
+                  },
+                );
               },
             )
           : ListView.separated(

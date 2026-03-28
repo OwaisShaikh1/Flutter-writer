@@ -14,6 +14,7 @@ class LiteratureItem {
   final String description;
   final bool isFavorite;
   final bool isSynced;
+  final int version;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -33,6 +34,7 @@ class LiteratureItem {
     required this.description,
     this.isFavorite = false,
     this.isSynced = false,
+    this.version = 1,
     this.createdAt,
     this.updatedAt,
   });
@@ -47,21 +49,46 @@ class LiteratureItem {
       return false;
     }
 
+    int toInt(dynamic value, {int fallback = 0}) {
+      if (value == null) return fallback;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value) ?? fallback;
+      return fallback;
+    }
+
+    double toDouble(dynamic value, {double fallback = 0.0}) {
+      if (value == null) return fallback;
+      if (value is double) return value;
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? fallback;
+      return fallback;
+    }
+
+    String toText(dynamic value, {String fallback = ''}) {
+      if (value == null) return fallback;
+      if (value is String) return value;
+      return value.toString();
+    }
+
+    final rawAuthorId = json['authorId'] ?? json['author_id'];
+
     return LiteratureItem(
-      id: json['id'] ?? json['item_id'] ?? 0,
-      title: json['title'] ?? json['name'] ?? '',
-      author: json['author'] ?? '',
-      authorId: json['authorId'] ?? json['author_id'],
-      type: json['type'] ?? '',
-      rating: (json['rating'] ?? json['review'] ?? 0.0).toDouble(),
-      chapters: json['chapters'] ?? json['chaptersCount'] ?? json['Number_of_chapters'] ?? 0,
-      comments: json['comments'] ?? json['commentsCount'] ?? json['comments_count'] ?? 0,
-      likes: json['likes'] ?? json['likesCount'] ?? json['likes_count'] ?? 0,
+      id: toInt(json['id'] ?? json['item_id']),
+      title: toText(json['title'] ?? json['name']),
+      author: toText(json['author'], fallback: 'Unknown Author'),
+      authorId: rawAuthorId == null ? null : toInt(rawAuthorId),
+      type: toText(json['type']),
+      rating: toDouble(json['rating'] ?? json['review']),
+      chapters: toInt(json['chapters'] ?? json['chaptersCount'] ?? json['Number_of_chapters']),
+      comments: toInt(json['comments'] ?? json['commentsCount'] ?? json['comments_count']),
+      likes: toInt(json['likes'] ?? json['likesCount'] ?? json['likes_count']),
       isLikedByUser: toBool(json['isLikedByUser'] ?? json['is_liked_by_user']),
-      imageUrl: json['image'] ?? json['imageUrl'] ?? json['image_path'],
-      description: json['description'] ?? '',
+      imageUrl: (json['image'] ?? json['imageUrl'] ?? json['image_path'])?.toString(),
+      description: toText(json['description']),
       isFavorite: toBool(json['isFavorite']),
       isSynced: toBool(json['isSynced']),
+        version: toInt(json['version'], fallback: 1),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
@@ -88,6 +115,7 @@ class LiteratureItem {
       'description': description,
       'isFavorite': isFavorite,
       'isSynced': isSynced,
+      'version': version,
     };
   }
 
@@ -109,6 +137,7 @@ class LiteratureItem {
       description: entity.description,
       isFavorite: entity.isFavorite,
       isSynced: entity.isSynced,
+      version: entity.version,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
     );
@@ -149,6 +178,7 @@ class LiteratureItem {
     String? description,
     bool? isFavorite,
     bool? isSynced,
+    int? version,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -168,6 +198,7 @@ class LiteratureItem {
       description: description ?? this.description,
       isFavorite: isFavorite ?? this.isFavorite,
       isSynced: isSynced ?? this.isSynced,
+      version: version ?? this.version,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

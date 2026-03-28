@@ -33,6 +33,30 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+  <script>
+    // Drift's legacy WebDatabase calls initSqlJs() without options.
+    // Ensure sql-wasm.wasm resolves to a real wasm URL instead of app index.html.
+    (function () {
+      const originalInitSqlJs = window.initSqlJs;
+      if (typeof originalInitSqlJs !== 'function') return;
+
+      const sqlJsCdnBase = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/';
+      window.initSqlJs = function (config) {
+        const nextConfig = config || {};
+        const userLocateFile = nextConfig.locateFile;
+
+        nextConfig.locateFile = function (file, prefix) {
+          if (typeof userLocateFile === 'function') {
+            return userLocateFile(file, prefix);
+          }
+          return sqlJsCdnBase + file;
+        };
+
+        return originalInitSqlJs(nextConfig);
+      };
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

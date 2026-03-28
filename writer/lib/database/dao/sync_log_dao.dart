@@ -11,6 +11,23 @@ class SyncLogDao extends DatabaseAccessor<AppDatabase> with _$SyncLogDaoMixin {
 
   // Log a CREATE operation for an item
   Future<void> logItemCreate(int localId, Map<String, dynamic> data, {int? userId}) async {
+    final existingCreate = await (select(syncLog)
+          ..where((t) =>
+              t.entityType.equals('item') &
+              t.entityId.equals(localId) &
+              t.operation.equals('create') &
+              (userId != null ? t.userId.equals(userId) : const Constant(true))))
+        .getSingleOrNull();
+
+    if (existingCreate != null) {
+      final existingData = jsonDecode(existingCreate.payload) as Map<String, dynamic>;
+      existingData.addAll(data);
+      await (update(syncLog)..where((t) => t.id.equals(existingCreate.id))).write(
+        SyncLogCompanion(payload: Value(jsonEncode(existingData))),
+      );
+      return;
+    }
+
     await into(syncLog).insert(SyncLogCompanion(
       userId: Value(userId),
       entityType: const Value('item'),

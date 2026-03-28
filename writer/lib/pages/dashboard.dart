@@ -51,61 +51,70 @@ class _DashboardState extends State<Dashboard> {
               onRefresh: _handleRefresh,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height - 
-                         MediaQuery.of(context).padding.top - 
-                         kToolbarHeight - 100, // Account for offline indicator and padding
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header with profile and logout
-                        _buildHeader(),
-                        const SizedBox(height: 12),
-                        
-                        // Search bar
-                        Consumer<LiteratureProvider>(
-                          builder: (context, provider, _) {
-                            return LiteratureSearchBar(
-                              onChanged: (value) => provider.setSearchQuery(value),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        
-                        // Filter section
-                        Consumer<LiteratureProvider>(
-                          builder: (context, provider, _) {
-                            return FilterSection(
-                              selected: provider.selectedFilter,
-                              onSelect: (filter) => provider.setFilter(filter),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        
-                        // Literature list
-                        Expanded(
-                          child: Consumer<LiteratureProvider>(
-                            builder: (context, provider, _) {
-                              if (provider.isLoading) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
-                              
-                              if (provider.items.isEmpty) {
-                                return _buildEmptyState(provider);
-                              }
-                              
-                              return LiteratureList(items: provider.items);
-                            },
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final horizontalPadding = constraints.maxWidth >= 900 ? 24.0 : 12.0;
+
+                    return Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1100),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding,
+                            vertical: 12,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Header with profile and logout
+                              _buildHeader(),
+                              const SizedBox(height: 12),
+
+                              // Search bar
+                              Consumer<LiteratureProvider>(
+                                builder: (context, provider, _) {
+                                  return LiteratureSearchBar(
+                                    onChanged: (value) => provider.setSearchQuery(value),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Filter section
+                              Consumer<LiteratureProvider>(
+                                builder: (context, provider, _) {
+                                  return FilterSection(
+                                    selected: provider.selectedFilter,
+                                    onSelect: (filter) => provider.setFilter(filter),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Literature list (scroll handled by parent)
+                              Consumer<LiteratureProvider>(
+                                builder: (context, provider, _) {
+                                  if (provider.isLoading) {
+                                    return const Padding(
+                                      padding: EdgeInsets.only(top: 48),
+                                      child: Center(child: CircularProgressIndicator()),
+                                    );
+                                  }
+
+                                  if (provider.items.isEmpty) {
+                                    return _buildEmptyState(provider);
+                                  }
+
+                                  return LiteratureList(items: provider.items);
+                                },
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),

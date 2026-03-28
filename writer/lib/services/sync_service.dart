@@ -26,21 +26,14 @@ class SyncService {
   Future<bool> isOnline() async {
     try {
       final dynamic result = await Connectivity().checkConnectivity();
-      print('📡 CONNECTIVITY: Result type: ${result.runtimeType}, value: $result');
-      
+
       // Handle both List<ConnectivityResult> (newer API) and single ConnectivityResult (older API)
-      bool hasNetwork = false;
       if (result is List) {
-        hasNetwork = result.isNotEmpty && !result.contains(ConnectivityResult.none);
-      } else {
-        hasNetwork = result != ConnectivityResult.none;
+        return result.isNotEmpty && !result.contains(ConnectivityResult.none);
       }
-      
-      print('📡 CONNECTIVITY: Network check - hasNetwork: $hasNetwork');
-      return hasNetwork;
-    } catch (e, stack) {
-      print('📡 CONNECTIVITY: Error checking connectivity: $e');
-      print('📡 CONNECTIVITY: Stack: $stack');
+
+      return result != ConnectivityResult.none;
+    } catch (_) {
       return false;
     }
   }
@@ -74,6 +67,7 @@ class SyncService {
           description: Value(item.description),
           isSynced: const Value(true),
           lastSyncedAt: Value(DateTime.now()),
+          version: Value(item.version),
         ));
       }
 

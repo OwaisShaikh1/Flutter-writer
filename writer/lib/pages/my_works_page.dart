@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../providers/literature_provider.dart';
 import '../providers/auth_provider.dart';
@@ -6,6 +7,7 @@ import '../models/literature_item.dart';
 import '../theme/app_theme.dart';
 import 'edit_literature_page.dart';
 import 'create_literature_page.dart';
+import 'sync_debug_page.dart';
 
 class MyWorksPage extends StatefulWidget {
   const MyWorksPage({super.key});
@@ -142,6 +144,17 @@ class _MyWorksPageState extends State<MyWorksPage> {
         ),
         centerTitle: true,
         actions: [
+          if (kDebugMode)
+            IconButton(
+              tooltip: 'Sync Debug',
+              icon: const Icon(Icons.bug_report_outlined),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SyncDebugPage()),
+                );
+              },
+            ),
           // Offline status indicator
           Consumer<LiteratureProvider>(
             builder: (context, provider, child) {

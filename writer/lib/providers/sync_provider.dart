@@ -125,10 +125,14 @@ class SyncProvider with ChangeNotifier {
       }
 
       // Process offline queue
-      if (_isOnline && _pendingCount > 0) {
+      if (_isOnline) {
         queueResult = await _offlineSyncService.processSyncQueue();
         print('📤 SYNC PROVIDER: Queue result - ${queueResult.success ? 'SUCCESS' : 'FAILED'}: ${queueResult.message}');
       }
+
+      // Re-check pending count after queue processing.
+      final pendingAfter = await _offlineSyncService.getPendingCount();
+      _pendingCount = pendingAfter;
 
       // Update sync time if either operation succeeded
       if (pullResult.success || queueResult.success) {
@@ -140,9 +144,19 @@ class SyncProvider with ChangeNotifier {
       _isSyncing = false;
       notifyListeners();
 
+      final queueDrained = pendingAfter == 0;
+      final syncSuccess = pullResult.success && queueResult.success && queueDrained;
+      if (!syncSuccess) {
+        _lastError = !queueDrained
+            ? '$pendingAfter change(s) still pending sync'
+            : (queueResult.success ? pullResult.message : queueResult.message);
+      }
+
       return offline.SyncResult(
-        success: pullResult.success || queueResult.success,
-        message: 'Pull: ${pullResult.message} | Queue: ${queueResult.message}',
+        success: syncSuccess,
+        message: syncSuccess
+            ? 'Sync completed successfully'
+            : (_lastError ?? 'Sync incomplete'),
         itemCount: (pullResult.itemCount ?? 0) + (queueResult.itemCount ?? 0),
       );
     } catch (e) {
