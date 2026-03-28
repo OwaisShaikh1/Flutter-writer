@@ -51,24 +51,21 @@ class OfflineSyncService {
   
   Future<bool> isOnline() async {
     try {
-      // First check basic connectivity
       final result = await Connectivity().checkConnectivity();
-      
-      // Simple connectivity check - just check if not 'none'
-      bool hasNetwork = result != ConnectivityResult.none;
-      
-      // If no basic connectivity, definitely offline
-      if (!hasNetwork) {
-        print('📡 CONNECTIVITY: No network connection');
-        return false;
+
+      // Handle both List<ConnectivityResult> (newer API) and single ConnectivityResult
+      if (result is List) {
+        final list = result as List;
+        final hasNetwork = list.isNotEmpty && !list.every((r) => r == ConnectivityResult.none);
+        print('📡 CONNECTIVITY: $hasNetwork (list: $list)');
+        return hasNetwork;
+      } else {
+        final hasNetwork = result != ConnectivityResult.none;
+        print('📡 CONNECTIVITY: $hasNetwork ($result)');
+        return hasNetwork;
       }
-      
-      // Check actual server reachability with faster timeout for offline-first
-      final serverReachable = await _api.ping(timeout: const Duration(seconds: 2));
-      print('📡 CONNECTIVITY: Network=$hasNetwork, Server=$serverReachable');
-      return serverReachable;
     } catch (e) {
-      print('📡 CONNECTIVITY: Error checking connectivity: $e');
+      print('📡 CONNECTIVITY: Error - $e');
       return false;
     }
   }
@@ -102,13 +99,13 @@ class OfflineSyncService {
           type: type,
           description: description,
           imageUrl: imageUrl,
-        ).timeout(const Duration(seconds: 3)); // Fast timeout for offline-first
+        ).timeout(const Duration(seconds: 15));
         
         if (serverId != null) {
           // Create chapters on server
           if (chapters.isNotEmpty) {
             await _api.createChapters(serverId, chapters)
-                .timeout(const Duration(seconds: 5)); // Fast timeout for chapters
+                .timeout(const Duration(seconds: 5));
           }
           
           // Store locally with server ID
@@ -143,7 +140,7 @@ class OfflineSyncService {
           return localId;
         }
       } catch (e) {
-        print('⚠️ OFFLINE SYNC: Online creation failed (${e.runtimeType}), falling back to offline: $e');
+        print('⚠️ OFFLINE SYNC: Online creation failed (${e.runtimeType}): $e — queuing for sync');
       }
     }
 
@@ -220,12 +217,12 @@ class OfflineSyncService {
           type: type,
           description: description,
           imageUrl: imageUrl,
-        ).timeout(const Duration(seconds: 3)); // Fast timeout for offline-first
+        ).timeout(const Duration(seconds: 15));
         
         if (success) {
           // Update chapters on server (complete replacement)
           await _api.updateChapters(item.serverId!, chapters)
-              .timeout(const Duration(seconds: 5)); // Fast timeout for chapters
+              .timeout(const Duration(seconds: 15));
           
           // Update locally
           await _updateItemLocally(localId, name, author, type, description, chapters, imageUrl, synced: true);
@@ -275,7 +272,7 @@ class OfflineSyncService {
       // Try to delete online first with fast timeout
       try {
         final success = await _api.deleteItem(item.serverId!)
-            .timeout(const Duration(seconds: 3)); // Fast timeout for offline-first
+            .timeout(const Duration(seconds: 15));
         if (success) {
           // Delete locally
           await _chaptersDao.deleteChaptersByItemId(localId);
@@ -461,8 +458,9 @@ class OfflineSyncService {
       final message = 'Sync completed: $successful successful, $failed failed';
       print('✅ OFFLINE SYNC: $message');
       
-      final result = SyncResult(success: true, message: message, itemCount: successful);
-      _notifySyncStatus(failed == 0 ? SyncStatus.synced : SyncStatus.error);
+      final allSucceeded = failed == 0;
+      final result = SyncResult(success: allSucceeded, message: message, itemCount: successful);
+      _notifySyncStatus(allSucceeded ? SyncStatus.synced : SyncStatus.error);
       _syncCompleter!.complete(result);
       return result;
       

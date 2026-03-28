@@ -5,6 +5,7 @@ import 'providers/auth_provider.dart';
 import 'providers/literature_provider.dart';
 import 'providers/sync_provider.dart';
 import 'providers/theme_provider.dart';
+import 'services/offline_sync_service.dart';
 import 'theme/app_theme.dart';
 import 'pages/dashboard.dart';
 import 'pages/login_page.dart';
@@ -19,13 +20,17 @@ void main() async {
   // Initialize database
   final database = AppDatabase();
 
-  runApp(MyApp(database: database));
+  // Single shared sync service — prevents duplicate writes from concurrent instances
+  final offlineSyncService = OfflineSyncService(database);
+
+  runApp(MyApp(database: database, offlineSyncService: offlineSyncService));
 }
 
 class MyApp extends StatelessWidget {
   final AppDatabase database;
+  final OfflineSyncService offlineSyncService;
 
-  const MyApp({super.key, required this.database});
+  const MyApp({super.key, required this.database, required this.offlineSyncService});
 
   @override
   Widget build(BuildContext context) {
@@ -39,12 +44,12 @@ class MyApp extends StatelessWidget {
         
         // Literature provider (depends on database)
         ChangeNotifierProvider(
-          create: (context) => LiteratureProvider(database),
+          create: (context) => LiteratureProvider(database, offlineSyncService),
         ),
         
         // Sync provider (depends on database)
         ChangeNotifierProvider(
-          create: (context) => SyncProvider(database),
+          create: (context) => SyncProvider(database, offlineSyncService),
         ),
         
         // Theme provider

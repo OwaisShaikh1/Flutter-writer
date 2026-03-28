@@ -37,16 +37,7 @@ class SyncService {
       }
       
       print('📡 CONNECTIVITY: Network check - hasNetwork: $hasNetwork');
-      
-      // If no basic connectivity, definitely offline
-      if (!hasNetwork) {
-        return false;
-      }
-      
-      // Check actual server reachability
-      final serverReachable = await _api.isServerReachable();
-      print('📡 CONNECTIVITY: Final check - network: $hasNetwork, server: $serverReachable');
-      return serverReachable;
+      return hasNetwork;
     } catch (e, stack) {
       print('📡 CONNECTIVITY: Error checking connectivity: $e');
       print('📡 CONNECTIVITY: Stack: $stack');

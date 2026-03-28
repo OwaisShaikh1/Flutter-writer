@@ -38,11 +38,11 @@ class LiteratureProvider with ChangeNotifier {
   offline.SyncStatus _syncStatus = offline.SyncStatus.synced;
   int _pendingCount = 0;
 
-  LiteratureProvider(this._db) {
+  LiteratureProvider(this._db, offline.OfflineSyncService offlineSyncService) {
     _itemsDao = ItemsDao(_db);
     _chaptersDao = ChaptersDao(_db);
     _syncService = sync.SyncService(_db);
-    _offlineSyncService = offline.OfflineSyncService(_db);
+    _offlineSyncService = offlineSyncService;
     _init();
     _loadCurrentUserId();
     _initSyncStatusWatching();
@@ -178,23 +178,23 @@ class LiteratureProvider with ChangeNotifier {
       
       _isSyncing = false;
       notifyListeners();
-      
-      // Even if sync fails, we still have local data
+
+      final syncedOk = pullResult.success && queueResult.success;
+      if (!syncedOk) {
+        print('❌ SYNC: Pull=${pullResult.message} | Queue=${queueResult.message}');
+      }
       return offline.SyncResult(
-        success: true, // Always return success since we have local data
-        message: pullResult.success || queueResult.success 
+        success: syncedOk,
+        message: syncedOk
             ? 'Sync completed successfully'
-            : 'Working offline with local data',
+            : 'Queue: ${queueResult.message}',
         itemCount: (pullResult.itemCount ?? 0) + (queueResult.itemCount ?? 0),
       );
     } catch (e) {
-      _errorMessage = 'Working offline - your data is available locally';
+      _errorMessage = 'Sync error: $e';
       _isSyncing = false;
       notifyListeners();
-      return offline.SyncResult(
-        success: true, // Still success since we have local data
-        message: 'Working offline with local data',
-      );
+      return offline.SyncResult(success: false, message: 'Sync error: $e');
     }
   }
 

@@ -24,9 +24,9 @@ class SyncProvider with ChangeNotifier {
   StreamSubscription<int>? _pendingCountSubscription;
   Timer? _backgroundSyncTimer;
 
-  SyncProvider(this._db) {
+  SyncProvider(this._db, offline.OfflineSyncService offlineSyncService) {
     _syncService = sync_svc.SyncService(_db);
-    _offlineSyncService = offline.OfflineSyncService(_db);
+    _offlineSyncService = offlineSyncService;
     _initConnectivity();
     _initSyncStatusWatching();
     _startBackgroundSync();
