@@ -1,8 +1,5 @@
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
+import 'connection/connection.dart';
 
 import 'tables/users_table.dart';
 import 'tables/items_table.dart';
@@ -15,7 +12,7 @@ part 'database.g.dart';
 
 @DriftDatabase(tables: [Users, Items, Chapters, UserActivity, SyncLog, Comments])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase() : super(openConnection());
 
   @override
   int get schemaVersion => 9;
@@ -92,18 +89,4 @@ class AppDatabase extends _$AppDatabase {
     await delete(items).go();
     await delete(users).go();
   }
-}
-
-// Opens/creates the SQLite database file on device
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    // Get app's document directory (e.g., /data/user/0/com.yourapp/files/)
-    final dbFolder = await getApplicationDocumentsDirectory();
-    
-    // Create SQLite database file: writer_app.db
-    final file = File(p.join(dbFolder.path, 'writer_app.db'));
-    
-    // Return connection to SQLite database
-    return NativeDatabase(file);
-  });
 }

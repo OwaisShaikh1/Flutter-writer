@@ -1,8 +1,8 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
+import 'storage_backend/storage_backend.dart';
 
 class StorageService {
-  final _storage = const FlutterSecureStorage();
+  final StorageBackend _storage = createStorageBackend();
   static const _tokenKey = 'jwt_token';
   static const _userIdKey = 'user_id';
   static const _usernameKey = 'username';

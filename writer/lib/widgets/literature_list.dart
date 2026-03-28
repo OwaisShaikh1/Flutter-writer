@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -9,6 +8,7 @@ import '../pages/author_profile_page.dart';
 import '../utils/constants.dart';
 import '../theme/app_theme.dart';
 import '../providers/theme_provider.dart';
+import 'platform_image/platform_local_image.dart';
 
 class LiteratureList extends StatelessWidget {
   final List<LiteratureItem> items;
@@ -271,16 +271,14 @@ class _LiteratureCard extends StatelessWidget {
 
   Widget _buildImage(BuildContext context, {double? width, double? height}) {
     // Check for local image first
-    if (item.imageLocalPath != null) {
-      final file = File(item.imageLocalPath!);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-        );
-      }
+    final localImage = buildLocalImageWidget(
+      item.imageLocalPath,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+    );
+    if (localImage != null) {
+      return localImage;
     }
     // Check for network image
     if (item.imageUrl != null && item.imageUrl!.isNotEmpty) {

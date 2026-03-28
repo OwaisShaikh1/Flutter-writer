@@ -1,15 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 import 'auth_service.dart';
 import '../models/literature_item.dart';
 import '../models/chapter.dart';
 import '../models/comment.dart';
 import '../models/user_profile.dart';
 import '../utils/constants.dart';
+import 'image_cache/image_cache_service.dart';
 
 /// Custom exception to distinguish between network errors and server errors
 class ApiException implements Exception {
@@ -51,9 +49,6 @@ class ApiService {
         print('❌ API: Failed to load items: ${response.statusCode} - ${response.body}');
         throw ApiException('Server returned ${response.statusCode}', isNetworkError: false);
       }
-    } on SocketException {
-      print('❌ API: No internet connection');
-      throw ApiException('No internet connection', isNetworkError: true);
     } on TimeoutException {
       print('❌ API: Request timeout');
       throw ApiException('Request timeout', isNetworkError: true);
@@ -336,23 +331,7 @@ class ApiService {
       final fullUrl = imageUrl.startsWith('http')
           ? imageUrl
           : '${ApiConstants.baseUrl}/$imageUrl';
-      
-      final response = await http.get(Uri.parse(fullUrl));
-      
-      if (response.statusCode == 200) {
-        final directory = await getApplicationDocumentsDirectory();
-        final imagesDir = Directory(p.join(directory.path, 'images'));
-        
-        if (!await imagesDir.exists()) {
-          await imagesDir.create(recursive: true);
-        }
-        
-        final file = File(p.join(imagesDir.path, fileName));
-        await file.writeAsBytes(response.bodyBytes);
-        
-        return file.path;
-      }
-      return null;
+      return await cacheImageForPlatform(fullUrl, fileName);
     } catch (e) {
       return null;
     }

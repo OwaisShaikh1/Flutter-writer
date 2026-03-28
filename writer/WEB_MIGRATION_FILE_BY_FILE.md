@@ -2,6 +2,18 @@
 
 This document lists the exact code changes needed to make the `writer` Flutter app available as a website, while introducing a **global platform flag** for web/android/future targets.
 
+## Progress status (implemented in this repo)
+
+- [x] Global platform flag (`lib/config/app_platform.dart`)
+- [x] Platform-aware API defaults in `lib/utils/constants.dart`
+- [x] Settings quick presets gated by platform in `lib/pages/settings_page.dart`
+- [x] Database platform adapter split (`lib/database/connection/*` + `database.dart` refactor)
+- [x] Image cache platform adapter split (`lib/services/image_cache/*` + `api_service.dart` refactor)
+- [x] Local image widget platform split (`lib/widgets/platform_image/*` + `literature_list.dart` refactor)
+- [x] Storage backend adapter split (`lib/services/storage_backend/*` + `storage_service.dart` refactor)
+- [ ] Final local validation (`flutter analyze`, `flutter run -d chrome`, `flutter build web --release`)
+- [ ] Deploy hosting + configure backend CORS for final public URL
+
 ## 1) Add a global platform flag (single source of truth)
 
 ### New file: `lib/config/app_platform.dart`
