@@ -1,11 +1,21 @@
 import '../services/storage_service.dart';
+import '../config/app_platform.dart';
 
 class ApiConstants {
   // Default URL for initial app launch
   static const String defaultBaseUrl = 'https://pokily-unawaked-amado.ngrok-free.app';
+  static const String defaultWebBaseUrl = defaultBaseUrl;
+  static const String defaultMobileBaseUrl = defaultBaseUrl;
+  static const String defaultDesktopBaseUrl = defaultBaseUrl;
+  
+  static String get platformDefaultBaseUrl {
+    if (AppPlatformConfig.isWeb) return defaultWebBaseUrl;
+    if (AppPlatformConfig.isDesktop) return defaultDesktopBaseUrl;
+    return defaultMobileBaseUrl;
+  }
   
   // Dynamic base URL - can be changed at runtime
-  static String _baseUrl = defaultBaseUrl;
+  static String _baseUrl = platformDefaultBaseUrl;
   
   static String get baseUrl => _baseUrl;
   
@@ -28,7 +38,7 @@ class ApiConstants {
   
   // Reset to default
   static Future<void> resetBaseUrl() async {
-    _baseUrl = defaultBaseUrl;
+    _baseUrl = platformDefaultBaseUrl;
     final storage = StorageService();
     await storage.deleteBaseUrl();
   }

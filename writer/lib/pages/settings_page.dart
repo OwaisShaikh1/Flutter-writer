@@ -5,6 +5,7 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../utils/constants.dart';
 import '../providers/theme_provider.dart';
 import '../providers/sync_provider.dart';
+import '../config/app_platform.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -95,7 +96,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await ApiConstants.resetBaseUrl();
       setState(() {
-        _currentUrl = ApiConstants.defaultBaseUrl;
+        _currentUrl = ApiConstants.platformDefaultBaseUrl;
         _urlController.text = _currentUrl;
       });
       _showMessage('Reset to default URL');
@@ -617,28 +618,30 @@ class _SettingsPageState extends State<SettingsPage> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                ActionChip(
-                  backgroundColor: colorScheme.surfaceVariant,
-                  avatar: const Icon(Icons.phone_android, size: 16),
-                  label: const Text('Emulator'),
-                  onPressed: () {
-                    _urlController.text = 'http://10.0.2.2:3000';
-                  },
-                ),
-                ActionChip(
-                  backgroundColor: colorScheme.surfaceVariant,
-                  avatar: const Icon(Icons.computer, size: 16),
-                  label: const Text('Localhost'),
-                  onPressed: () {
-                    _urlController.text = 'http://localhost:3000';
-                  },
-                ),
+                if (AppPlatformConfig.isAndroid)
+                  ActionChip(
+                    backgroundColor: colorScheme.surfaceVariant,
+                    avatar: const Icon(Icons.phone_android, size: 16),
+                    label: const Text('Emulator'),
+                    onPressed: () {
+                      _urlController.text = 'http://10.0.2.2:3000';
+                    },
+                  ),
+                if (!AppPlatformConfig.isWeb)
+                  ActionChip(
+                    backgroundColor: colorScheme.surfaceVariant,
+                    avatar: const Icon(Icons.computer, size: 16),
+                    label: const Text('Localhost'),
+                    onPressed: () {
+                      _urlController.text = 'http://localhost:3000';
+                    },
+                  ),
                 ActionChip(
                   backgroundColor: colorScheme.surfaceVariant,
                   avatar: const Icon(Icons.public, size: 16),
                   label: const Text('Ngrok'),
                   onPressed: () {
-                    _urlController.text = ApiConstants.defaultBaseUrl;
+                    _urlController.text = ApiConstants.platformDefaultBaseUrl;
                   },
                 ),
               ],
