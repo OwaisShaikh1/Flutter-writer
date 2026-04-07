@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../database/database.dart';
 import '../database/dao/items_dao.dart';
 import '../database/dao/chapters_dao.dart';
+import '../models/chapter.dart';
 import 'api_service.dart';
 
 /// Simplified Sync Service - Direct API calls
@@ -395,6 +396,64 @@ class SyncService {
     } catch (e) {
       print('❌ DELETE CHAPTER: Failed - $e');
       return false;
+    }
+  }
+
+  /// Publish a single chapter to server, overwriting if it already exists.
+  Future<bool> publishChapter({
+    required int itemId,
+    required int chapterNumber,
+    required String title,
+    required String content,
+  }) async {
+    if (!await isOnline()) {
+      print('❌ PUBLISH CHAPTER: No internet connection');
+      return false;
+    }
+
+    try {
+      final remoteItemId = await _resolveRemoteItemId(itemId);
+      final updated = await _api.updateChapter(
+        remoteItemId,
+        chapterNumber,
+        {
+          'title': title,
+          'content': content,
+          'number': chapterNumber,
+        },
+      );
+
+      if (updated) {
+        return true;
+      }
+
+      // If chapter doesn't exist remotely yet, create it.
+      return await _api.createChapters(remoteItemId, [
+        {
+          'number': chapterNumber,
+          'title': title,
+          'content': content,
+        }
+      ]);
+    } catch (e) {
+      print('❌ PUBLISH CHAPTER: Failed - $e');
+      return false;
+    }
+  }
+
+  /// Fetch the current published version of a chapter from server.
+  Future<Chapter?> fetchPublishedChapter(int itemId, int chapterNumber) async {
+    if (!await isOnline()) {
+      print('❌ DISCARD CHAPTER: No internet connection');
+      return null;
+    }
+
+    try {
+      final remoteItemId = await _resolveRemoteItemId(itemId);
+      return await _api.fetchChapter(remoteItemId, chapterNumber);
+    } catch (e) {
+      print('❌ DISCARD CHAPTER: Failed to fetch published chapter - $e');
+      return null;
     }
   }
 

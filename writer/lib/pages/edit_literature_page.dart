@@ -75,19 +75,40 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
   Future<void> _loadChapters() async {
     try {
       final provider = Provider.of<LiteratureProvider>(context, listen: false);
-      
-      // First, pull fresh chapters from server (this also deletes removed chapters)
-      await provider.downloadChapters(widget.item.id);
-      
-      // Then load from local DB
-      final chapters = await provider.getChaptersForItem(widget.item.id);
+
+      // Load published chapters from local DB.
+      var publishedChapters = await provider.getChaptersForItem(widget.item.id);
+
+      // If local cache is empty, bootstrap from server once.
+      if (publishedChapters.isEmpty) {
+        await provider.downloadChapters(widget.item.id);
+        publishedChapters = await provider.getChaptersForItem(widget.item.id);
+      }
+
+      final draftMap = await provider.getChapterDraftsForItem(widget.item.id);
+      final allNumbers = <int>{
+        ...publishedChapters.map((c) => c.number),
+        ...draftMap.keys,
+      }.toList()
+        ..sort();
+
+      final publishedByNumber = {
+        for (final ch in publishedChapters) ch.number: ch,
+      };
+
+      final merged = allNumbers.map((number) {
+        final draft = draftMap[number];
+        final published = publishedByNumber[number];
+        return ChapterDraft(
+          number: number,
+          title: (draft?['title'] as String?) ?? published?.title ?? 'Chapter $number',
+          content: (draft?['content'] as String?) ?? published?.content ?? '',
+          hasPendingDraft: draft != null,
+        );
+      }).toList();
       
       setState(() {
-        _chapters = chapters.map((ch) => ChapterDraft(
-          number: ch.number,
-          title: ch.title,
-          content: ch.content,
-        )).toList();
+        _chapters = merged;
         _isLoading = false;
       });
     } catch (e) {
@@ -114,8 +135,105 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
     super.dispose();
   }
 
+  Future<void> _refreshChaptersFromLocal() async {
+    final provider = Provider.of<LiteratureProvider>(context, listen: false);
+    final publishedChapters = await provider.getChaptersForItem(widget.item.id);
+    final draftMap = await provider.getChapterDraftsForItem(widget.item.id);
+
+    final allNumbers = <int>{
+      ...publishedChapters.map((c) => c.number),
+      ...draftMap.keys,
+    }.toList()
+      ..sort();
+
+    final publishedByNumber = {
+      for (final ch in publishedChapters) ch.number: ch,
+    };
+
+    final merged = allNumbers.map((number) {
+      final draft = draftMap[number];
+      final published = publishedByNumber[number];
+      return ChapterDraft(
+        number: number,
+        title: (draft?['title'] as String?) ?? published?.title ?? 'Chapter $number',
+        content: (draft?['content'] as String?) ?? published?.content ?? '',
+        hasPendingDraft: draft != null,
+      );
+    }).toList();
+
+    if (!mounted) return;
+    setState(() {
+      _chapters = merged;
+    });
+  }
+
+  Future<void> _handleChapterAction({
+    required int chapterNumber,
+    required Map<String, dynamic> result,
+  }) async {
+    final provider = Provider.of<LiteratureProvider>(context, listen: false);
+    final action = (result['action'] as String?) ?? 'save';
+    final title = (result['title'] as String?)?.trim() ?? '';
+    final content = (result['content'] as String?)?.trim() ?? '';
+
+    setState(() => _isSaving = true);
+    try {
+      bool ok = false;
+
+      if (action == 'save') {
+        ok = await provider.saveChapterDraftLocally(
+          itemId: widget.item.id,
+          chapterNumber: chapterNumber,
+          title: title,
+          content: content,
+        );
+      } else if (action == 'publish') {
+        ok = await provider.publishChapter(
+          itemId: widget.item.id,
+          chapterNumber: chapterNumber,
+          title: title,
+          content: content,
+        );
+      } else if (action == 'discard') {
+        ok = await provider.discardChapterChanges(
+          itemId: widget.item.id,
+          chapterNumber: chapterNumber,
+        );
+      }
+
+      if (!mounted) return;
+
+      if (ok) {
+        await _refreshChaptersFromLocal();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              action == 'save'
+                  ? 'Chapter saved locally only.'
+                  : action == 'publish'
+                      ? 'Chapter published to server.'
+                      : 'Chapter reverted to published version.',
+            ),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.errorMessage ?? 'Chapter action failed'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
   void _addChapter() async {
-    final result = await Navigator.push<Map<String, String>>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => AddChapterPage(
@@ -125,20 +243,16 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
     );
 
     if (result != null) {
-      setState(() {
-        _chapters.add(ChapterDraft(
-          number: _chapters.length + 1,
-          title: result['title']!,
-          content: result['content']!,
-        ));
-        _hasChanges = true;
-      });
+      await _handleChapterAction(
+        chapterNumber: _chapters.length + 1,
+        result: result,
+      );
     }
   }
 
   void _editChapter(int index) async {
     final chapter = _chapters[index];
-    final result = await Navigator.push<Map<String, String>>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => AddChapterPage(
@@ -146,19 +260,16 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
           initialTitle: chapter.title,
           initialContent: chapter.content,
           isEdit: true,
+          requireActionOnDone: chapter.hasPendingDraft,
         ),
       ),
     );
 
     if (result != null) {
-      setState(() {
-        _chapters[index] = ChapterDraft(
-          number: chapter.number,
-          title: result['title']!,
-          content: result['content']!,
-        );
-        _hasChanges = true;
-      });
+      await _handleChapterAction(
+        chapterNumber: chapter.number,
+        result: result,
+      );
     }
   }
 
@@ -814,12 +925,34 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '${chapter.content.length} characters',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            '${chapter.content.length} characters',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                            ),
+                          ),
+                          if (chapter.hasPendingDraft) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                'DRAFT',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),

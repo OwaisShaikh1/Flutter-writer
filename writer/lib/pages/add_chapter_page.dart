@@ -7,6 +7,7 @@ class AddChapterPage extends StatefulWidget {
   final String? initialTitle;
   final String? initialContent;
   final bool isEdit;
+  final bool requireActionOnDone;
 
   const AddChapterPage({
     super.key,
@@ -14,6 +15,7 @@ class AddChapterPage extends StatefulWidget {
     this.initialTitle,
     this.initialContent,
     this.isEdit = false,
+    this.requireActionOnDone = false,
   });
 
   @override
@@ -28,6 +30,13 @@ class _AddChapterPageState extends State<AddChapterPage> {
   int _wordCount = 0;
   bool _isPreviewMode = false;
   bool _showToolbar = true;
+
+  bool get _hasChanges {
+    final originalTitle = widget.initialTitle ?? 'Chapter ${widget.chapterNumber}';
+    final originalContent = widget.initialContent ?? '';
+    return _titleController.text.trim() != originalTitle ||
+        _contentController.text.trim() != originalContent;
+  }
 
   @override
   void initState() {
@@ -68,14 +77,71 @@ class _AddChapterPageState extends State<AddChapterPage> {
     }
   }
 
-  void _saveChapter() {
-    if (_formKey.currentState!.validate()) {
-      // Return the chapter data to the previous screen
-      Navigator.pop(context, {
-        'title': _titleController.text.trim(),
-        'content': _contentController.text.trim(),
-      });
+  void _returnChapterAction(String action) {
+    Navigator.pop(context, {
+      'action': action,
+      'title': _titleController.text.trim(),
+      'content': _contentController.text.trim(),
+    });
+  }
+
+  void _showChapterActionOptions() {
+    if (!_hasChanges && !widget.requireActionOnDone) {
+      Navigator.pop(context);
+      return;
     }
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Chapter ${widget.chapterNumber}: choose action',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(Icons.save_outlined),
+                  title: const Text('Save (Local Only)'),
+                  subtitle: const Text('Stored only on this device. Not published.'),
+                  onTap: () {
+                    if (!_formKey.currentState!.validate()) return;
+                    Navigator.pop(context);
+                    _returnChapterAction('save');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.cloud_upload_outlined),
+                  title: const Text('Publish'),
+                  subtitle: const Text('Push this chapter to server and overwrite published text.'),
+                  onTap: () {
+                    if (!_formKey.currentState!.validate()) return;
+                    Navigator.pop(context);
+                    _returnChapterAction('publish');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.restore_outlined),
+                  title: const Text('Discard'),
+                  subtitle: const Text('Revert to the last published chapter text.'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _returnChapterAction('discard');
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _cancelEditing() {
@@ -162,7 +228,7 @@ class _AddChapterPageState extends State<AddChapterPage> {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: TextButton(
-              onPressed: _saveChapter,
+              onPressed: _showChapterActionOptions,
               child: Text(
                 'DONE',
                 style: TextStyle(

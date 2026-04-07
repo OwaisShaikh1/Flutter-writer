@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:drift/drift.dart';
 import '../database/database.dart';
 import '../database/dao/items_dao.dart';
 import '../database/dao/chapters_dao.dart';
@@ -329,6 +330,7 @@ class LiteratureProvider with ChangeNotifier {
       );
 
       if (success) {
+        await _storageService.clearChapterDraftsForItem(id);
         if (_pendingCount > 0) {
           _errorMessage = 'Updated offline - will sync when connected';
         } else {
@@ -349,6 +351,7 @@ class LiteratureProvider with ChangeNotifier {
   /// Works with or without internet - queues for sync when offline
   Future<bool> deleteItem(int id) async {
     try {
+      await _storageService.clearChapterDraftsForItem(id);
       final success = await _offlineSyncService.deleteItemOfflineFirst(id);
       
       if (success) {
@@ -428,6 +431,131 @@ class LiteratureProvider with ChangeNotifier {
     }
   }
 
+  /// Save chapter changes locally only (draft), without publishing to server.
+  Future<bool> saveChapterDraftLocally({
+    required int itemId,
+    required int chapterNumber,
+    required String title,
+    required String content,
+  }) async {
+    try {
+      await _storageService.saveChapterDraft(
+        itemId: itemId,
+        chapterNumber: chapterNumber,
+        title: title,
+        content: content,
+      );
+
+      _errorMessage = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Failed to save local chapter draft: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Publish one chapter to server (overwrite if it already exists).
+  Future<bool> publishChapter({
+    required int itemId,
+    required int chapterNumber,
+    required String title,
+    required String content,
+  }) async {
+    try {
+      final published = await _syncService.publishChapter(
+        itemId: itemId,
+        chapterNumber: chapterNumber,
+        title: title,
+        content: content,
+      );
+
+      if (!published) {
+        _errorMessage = 'Failed to publish chapter (check internet connection)';
+        notifyListeners();
+        return false;
+      }
+
+      final existing = await _chaptersDao.getChapter(itemId, chapterNumber);
+      final nextVersion = (existing?.version ?? 0) + 1;
+
+      await _chaptersDao.upsertChapter(
+        ChaptersCompanion(
+          itemId: Value(itemId),
+          number: Value(chapterNumber),
+          title: Value(title),
+          content: Value(content),
+          isDownloaded: const Value(true),
+          downloadedAt: Value(DateTime.now()),
+          hasChanged: const Value(false),
+          version: Value(nextVersion),
+        ),
+      );
+
+      await _storageService.clearChapterDraft(itemId, chapterNumber);
+
+      _errorMessage = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Failed to publish chapter: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Discard local chapter edits and restore the last published chapter text.
+  /// If the chapter does not exist on server, the local chapter is removed.
+  Future<bool> discardChapterChanges({
+    required int itemId,
+    required int chapterNumber,
+  }) async {
+    try {
+      final hasDraft = await _storageService.getChapterDraft(itemId, chapterNumber) != null;
+      if (!hasDraft) {
+        _errorMessage = null;
+        notifyListeners();
+        return true;
+      }
+
+      final published = await _syncService.fetchPublishedChapter(itemId, chapterNumber);
+
+      if (published == null) {
+        await _storageService.clearChapterDraft(itemId, chapterNumber);
+        _errorMessage = null;
+        notifyListeners();
+        return true;
+      }
+
+      final existing = await _chaptersDao.getChapter(itemId, chapterNumber);
+      final nextVersion = (existing?.version ?? 0) + 1;
+
+      await _chaptersDao.upsertChapter(
+        ChaptersCompanion(
+          itemId: Value(itemId),
+          number: Value(chapterNumber),
+          title: Value(published.title),
+          content: Value(published.content),
+          isDownloaded: const Value(true),
+          downloadedAt: Value(DateTime.now()),
+          hasChanged: const Value(false),
+          version: Value(nextVersion),
+        ),
+      );
+
+      await _storageService.clearChapterDraft(itemId, chapterNumber);
+
+      _errorMessage = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Failed to discard chapter changes: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Export a whole novel as a local styled text document.
   /// Uses local database chapters only, so it works fully offline.
   /// Export is restricted to the author of the item.
@@ -477,6 +605,7 @@ class LiteratureProvider with ChangeNotifier {
   /// Works with or without internet - queues for sync when offline
   Future<bool> deleteChapter(int itemId, int chapterNumber) async {
     try {
+      await _storageService.clearChapterDraft(itemId, chapterNumber);
       final success = await _offlineSyncService.deleteChapterOfflineFirst(itemId, chapterNumber);
       
       if (success) {
@@ -494,6 +623,14 @@ class LiteratureProvider with ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<Map<String, dynamic>?> getChapterDraft(int itemId, int chapterNumber) async {
+    return _storageService.getChapterDraft(itemId, chapterNumber);
+  }
+
+  Future<Map<int, Map<String, dynamic>>> getChapterDraftsForItem(int itemId) async {
+    return _storageService.getChapterDraftsForItem(itemId);
   }
 
   void setCurrentUserId(int? userId) {

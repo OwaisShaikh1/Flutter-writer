@@ -668,29 +668,6 @@ class ApiService {
     }
   }
 
-  // Fetch changelog since a specific timestamp
-  Future<Map<String, dynamic>> fetchChangelog(DateTime since) async {
-    try {
-      final sinceStr = since.toUtc().toIso8601String();
-      final response = await http.get(
-        Uri.parse('${ApiConstants.baseUrl}/changelog?since=$sinceStr'),
-        headers: await _getHeaders(),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'changes': data['changes'] as List,
-          'count': data['count'] as int,
-          'hasMore': data['hasMore'] as bool,
-        };
-      }
-      throw Exception('Failed to fetch changelog: ${response.statusCode}');
-    } catch (e) {
-      throw Exception('Failed to fetch changelog: $e');
-    }
-  }
-
   // Toggle like for an item
   Future<Map<String, dynamic>?> toggleLike(int itemId) async {
     try {

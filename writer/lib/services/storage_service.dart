@@ -8,6 +8,10 @@ class StorageService {
   static const _usernameKey = 'username';
   static const _nameKey = 'user_name';
   static const _pendingDeletesKey = 'pending_deletes';
+  static const _chapterDraftIndexKey = 'chapter_draft_index';
+
+  String _chapterDraftKey(int itemId, int chapterNumber) =>
+      'chapter_draft_${itemId}_$chapterNumber';
 
   // Token management
   Future<void> saveToken(String token) async {
@@ -155,6 +159,112 @@ class StorageService {
 
   Future<void> clearPendingDeletes() async {
     await _storage.delete(key: _pendingDeletesKey);
+  }
+
+  // Chapter draft management (local-only, unpublished chapter edits)
+  Future<List<String>> _getChapterDraftIndex() async {
+    final data = await _storage.read(key: _chapterDraftIndexKey);
+    if (data == null || data.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is List) {
+        return decoded.map((e) => e.toString()).toList();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _setChapterDraftIndex(List<String> keys) async {
+    await _storage.write(key: _chapterDraftIndexKey, value: jsonEncode(keys));
+  }
+
+  Future<void> saveChapterDraft({
+    required int itemId,
+    required int chapterNumber,
+    required String title,
+    required String content,
+  }) async {
+    final key = _chapterDraftKey(itemId, chapterNumber);
+    await _storage.write(
+      key: key,
+      value: jsonEncode({
+        'itemId': itemId,
+        'chapterNumber': chapterNumber,
+        'title': title,
+        'content': content,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }),
+    );
+
+    final index = await _getChapterDraftIndex();
+    if (!index.contains(key)) {
+      index.add(key);
+      await _setChapterDraftIndex(index);
+    }
+  }
+
+  Future<Map<String, dynamic>?> getChapterDraft(int itemId, int chapterNumber) async {
+    final key = _chapterDraftKey(itemId, chapterNumber);
+    final raw = await _storage.read(key: key);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return decoded.cast<String, dynamic>();
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<int, Map<String, dynamic>>> getChapterDraftsForItem(int itemId) async {
+    final index = await _getChapterDraftIndex();
+    final result = <int, Map<String, dynamic>>{};
+
+    for (final key in index) {
+      if (!key.startsWith('chapter_draft_${itemId}_')) continue;
+      final raw = await _storage.read(key: key);
+      if (raw == null || raw.isEmpty) continue;
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          final number = decoded['chapterNumber'];
+          if (number is int) {
+            result[number] = decoded;
+          }
+        } else if (decoded is Map) {
+          final map = decoded.cast<String, dynamic>();
+          final number = map['chapterNumber'];
+          if (number is int) {
+            result[number] = map;
+          }
+        }
+      } catch (_) {
+        // Ignore malformed draft entries
+      }
+    }
+
+    return result;
+  }
+
+  Future<void> clearChapterDraft(int itemId, int chapterNumber) async {
+    final key = _chapterDraftKey(itemId, chapterNumber);
+    await _storage.delete(key: key);
+    final index = await _getChapterDraftIndex();
+    index.removeWhere((k) => k == key);
+    await _setChapterDraftIndex(index);
+  }
+
+  Future<void> clearChapterDraftsForItem(int itemId) async {
+    final index = await _getChapterDraftIndex();
+    final toRemove = index.where((k) => k.startsWith('chapter_draft_${itemId}_')).toList();
+    for (final key in toRemove) {
+      await _storage.delete(key: key);
+    }
+    index.removeWhere((k) => k.startsWith('chapter_draft_${itemId}_'));
+    await _setChapterDraftIndex(index);
   }
 
   // Last sync timestamp management (for changelog-based sync)

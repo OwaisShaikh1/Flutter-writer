@@ -52,7 +52,7 @@ class _CreateLiteraturePageState extends State<CreateLiteraturePage> {
   }
 
   void _addChapter() async {
-    final result = await Navigator.push<Map<String, String>>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => AddChapterPage(
@@ -62,11 +62,14 @@ class _CreateLiteraturePageState extends State<CreateLiteraturePage> {
     );
 
     if (result != null) {
+      final action = (result['action'] as String?) ?? 'save';
+      if (action == 'discard') return;
+
       setState(() {
         _chapters.add(ChapterDraft(
           number: _chapters.length + 1,
-          title: result['title']!,
-          content: result['content']!,
+          title: (result['title'] as String?) ?? '',
+          content: (result['content'] as String?) ?? '',
         ));
       });
     }
@@ -74,7 +77,7 @@ class _CreateLiteraturePageState extends State<CreateLiteraturePage> {
 
   void _editChapter(int index) async {
     final chapter = _chapters[index];
-    final result = await Navigator.push<Map<String, String>>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => AddChapterPage(
@@ -87,11 +90,14 @@ class _CreateLiteraturePageState extends State<CreateLiteraturePage> {
     );
 
     if (result != null) {
+      final action = (result['action'] as String?) ?? 'save';
+      if (action == 'discard') return;
+
       setState(() {
         _chapters[index] = ChapterDraft(
           number: chapter.number,
-          title: result['title']!,
-          content: result['content']!,
+          title: (result['title'] as String?) ?? chapter.title,
+          content: (result['content'] as String?) ?? chapter.content,
         );
       });
     }
@@ -767,22 +773,26 @@ class ChapterDraft {
   final int number;
   final String title;
   final String content;
+  final bool hasPendingDraft;
 
   ChapterDraft({
     required this.number,
     required this.title,
     required this.content,
+    this.hasPendingDraft = false,
   });
 
   ChapterDraft copyWith({
     int? number,
     String? title,
     String? content,
+    bool? hasPendingDraft,
   }) {
     return ChapterDraft(
       number: number ?? this.number,
       title: title ?? this.title,
       content: content ?? this.content,
+      hasPendingDraft: hasPendingDraft ?? this.hasPendingDraft,
     );
   }
 }
