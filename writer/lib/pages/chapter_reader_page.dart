@@ -76,11 +76,11 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
         print('📖 READER: Creating SyncService...');
         final db = Provider.of<AppDatabase>(context, listen: false);
         final syncService = SyncService(db);
-        print('📖 READER: Calling pullChapters...');
-        final result = await syncService.pullChapters(widget.item.id);
-        print('📖 READER: pullChapters result: $result');
+        print('📖 READER: Downloading chapter $_currentChapter only...');
+        final downloadedOk = await syncService.downloadChapter(widget.item.id, _currentChapter);
+        print('📖 READER: downloadChapter result: $downloadedOk');
         
-        if (result.success) {
+        if (downloadedOk) {
           final downloaded = await _chaptersDao.getChapter(widget.item.id, _currentChapter);
           if (downloaded != null) {
             setState(() {

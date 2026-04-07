@@ -115,19 +115,36 @@ class SyncProvider with ChangeNotifier {
     try {
       print('🔄 SYNC PROVIDER: Starting full sync...');
       
-      sync_svc.SyncResult pullResult = sync_svc.SyncResult(success: true, message: 'No pull needed');
-      offline.SyncResult queueResult = offline.SyncResult(success: true, message: 'No queue to process');
+      sync_svc.SyncResult pullResult =
+          sync_svc.SyncResult(success: true, message: 'No pull needed');
+      offline.SyncResult queueResult =
+          offline.SyncResult(success: true, message: 'No queue to process');
 
-      // Pull latest data from server
-      if (_isOnline) {
-        pullResult = await _syncService.pullItems();
-        print('📥 SYNC PROVIDER: Pull result - ${pullResult.success ? 'SUCCESS' : 'FAILED'}: ${pullResult.message}');
-      }
-
-      // Process offline queue
+      // Process queue first so pending local changes get pushed before pull.
       if (_isOnline) {
         queueResult = await _offlineSyncService.processSyncQueue();
-        print('📤 SYNC PROVIDER: Queue result - ${queueResult.success ? 'SUCCESS' : 'FAILED'}: ${queueResult.message}');
+        print(
+          '📤 SYNC PROVIDER: Queue result - '
+          '${queueResult.success ? 'SUCCESS' : 'FAILED'}: ${queueResult.message}',
+        );
+      }
+
+      final pendingAfterQueue = await _offlineSyncService.getPendingCount();
+
+      // Pull only if queue is drained or had nothing pending.
+      if (_isOnline && (queueResult.success || pendingAfterQueue == 0)) {
+        pullResult = await _syncService.pullItems();
+        print(
+          '📥 SYNC PROVIDER: Pull result - '
+          '${pullResult.success ? 'SUCCESS' : 'FAILED'}: ${pullResult.message}',
+        );
+      } else if (_isOnline) {
+        pullResult = sync_svc.SyncResult(
+          success: false,
+          message: 'Skipped pull because local changes are still pending',
+          itemCount: 0,
+        );
+        print('⏭️ SYNC PROVIDER: Pull skipped while pending changes remain');
       }
 
       // Re-check pending count after queue processing.

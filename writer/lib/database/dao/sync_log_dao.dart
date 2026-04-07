@@ -53,14 +53,32 @@ class SyncLogDao extends DatabaseAccessor<AppDatabase> with _$SyncLogDaoMixin {
       await (update(syncLog)..where((t) => t.id.equals(existingCreate.id)))
           .write(SyncLogCompanion(payload: Value(jsonEncode(existingData))));
     } else {
-      // Log as update
-      await into(syncLog).insert(SyncLogCompanion(
-        userId: Value(userId),
-        entityType: const Value('item'),
-        entityId: Value(itemId),
-        operation: const Value('update'),
-        payload: Value(jsonEncode(data)),
-      ));
+      // Check for existing update operations for the same item
+      final existingUpdate = await (select(syncLog)
+            ..where((t) => t.entityType.equals('item') & 
+                           t.entityId.equals(itemId) & 
+                           t.operation.equals('update')))
+          .getSingleOrNull();
+      
+      if (existingUpdate != null) {
+        // Merge with existing update (new data overwrites old)
+        final existingData = jsonDecode(existingUpdate.payload) as Map<String, dynamic>;
+        existingData.addAll(data);
+        await (update(syncLog)..where((t) => t.id.equals(existingUpdate.id)))
+            .write(SyncLogCompanion(
+              payload: Value(jsonEncode(existingData)),
+              attempts: const Value(0), // Reset attempts when updating
+            ));
+      } else {
+        // Log as new update
+        await into(syncLog).insert(SyncLogCompanion(
+          userId: Value(userId),
+          entityType: const Value('item'),
+          entityId: Value(itemId),
+          operation: const Value('update'),
+          payload: Value(jsonEncode(data)),
+        ));
+      }
     }
   }
 

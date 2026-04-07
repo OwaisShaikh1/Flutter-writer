@@ -110,6 +110,27 @@ class _MyWorksPageState extends State<MyWorksPage> {
     );
   }
 
+  Future<void> _exportNovelDocument(LiteratureItem item) async {
+    final provider = Provider.of<LiteratureProvider>(context, listen: false);
+    final result = await provider.exportNovelDocument(item.id);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.success
+              ? 'Exported to: ${result.filePath}'
+              : result.message,
+        ),
+        backgroundColor: result.success
+            ? Theme.of(context).colorScheme.tertiary
+            : Theme.of(context).colorScheme.error,
+        duration: Duration(seconds: result.success ? 5 : 3),
+      ),
+    );
+  }
+
   Color _getTypeColor(String type) {
     switch (type.toLowerCase()) {
       case 'drama':
@@ -417,10 +438,12 @@ class _MyWorksPageState extends State<MyWorksPage> {
                 icon: Icon(Icons.more_vert, size: 20, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
                 onSelected: (value) {
                   if (value == 'edit') _navigateToEditLiterature(item);
+                  if (value == 'export') _exportNovelDocument(item);
                   if (value == 'delete') _confirmDelete(item);
                 },
                 itemBuilder: (context) => [
                   const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  const PopupMenuItem(value: 'export', child: Text('Export Novel (Offline)')),
                   const PopupMenuItem(value: 'delete', child: Text('Delete')),
                 ],
               ),

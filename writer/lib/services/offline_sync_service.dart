@@ -52,6 +52,16 @@ class OfflineSyncService {
     }
   }
 
+  String? _toRemoteImageUrl(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty) return null;
+    if (imageUrl.startsWith('blob:') ||
+        imageUrl.startsWith('file:') ||
+        imageUrl.startsWith('data:')) {
+      return null;
+    }
+    return imageUrl;
+  }
+
   // ==================== OFFLINE-FIRST CRUD ====================
 
   Future<int?> createItemOfflineFirst({
@@ -60,6 +70,7 @@ class OfflineSyncService {
     required String description,
     required List<Map<String, dynamic>> chapters,
     String? imageUrl,
+    String? imageLocalPath,
   }) async {
     final userId = await _storage.getUserId();
     final userName = await _storage.getName();
@@ -79,6 +90,7 @@ class OfflineSyncService {
           description: Value(description),
           chaptersCount: Value(chapters.length),
           imageUrl: Value(imageUrl),
+          imageLocalPath: Value(imageLocalPath),
           isSynced: const Value(false),
           hasChanged: const Value(true),
           version: const Value(1),
@@ -105,6 +117,7 @@ class OfflineSyncService {
           'type': type,
           'description': description,
           'imageUrl': imageUrl,
+          'imageLocalPath': imageLocalPath,
           'chapters': chapters,
           'clientRequestId': requestId,
         },
@@ -127,6 +140,7 @@ class OfflineSyncService {
     required String description,
     required List<Map<String, dynamic>> chapters,
     String? imageUrl,
+    String? imageLocalPath,
   }) async {
     final userId = await _storage.getUserId();
     if (userId == null) throw Exception('User not logged in');
@@ -144,9 +158,10 @@ class OfflineSyncService {
           description: Value(description),
           chaptersCount: Value(chapters.length),
           imageUrl: Value(imageUrl),
+          imageLocalPath: Value(imageLocalPath),
           isSynced: const Value(false),
           hasChanged: const Value(true),
-          version: Value((item.version ?? 1) + 1),
+          version: Value(item.version + 1),
         ),
       );
 
@@ -159,7 +174,7 @@ class OfflineSyncService {
             title: Value(chapter['title']),
             content: Value(chapter['content']),
             isDownloaded: const Value(true),
-            version: Value((item.version ?? 1) + 1),
+            version: Value(item.version + 1),
           ),
         );
       }
@@ -172,6 +187,7 @@ class OfflineSyncService {
           'type': type,
           'description': description,
           'imageUrl': imageUrl,
+          'imageLocalPath': imageLocalPath,
           'chapters': chapters,
         },
         userId: userId,
@@ -210,7 +226,7 @@ class OfflineSyncService {
     if (chapter == null) return true;
 
     await _db.transaction(() async {
-      await _syncLogDao.logChapterDelete(chapter.id!, itemId, chapterNumber, userId: userId);
+      await _syncLogDao.logChapterDelete(chapter.id, itemId, chapterNumber, userId: userId);
       await _chaptersDao.deleteChapter(itemId, chapterNumber);
     });
 
@@ -271,6 +287,7 @@ class OfflineSyncService {
 
       int successCount = 0;
       int failCount = 0;
+      const int maxRetries = 3; // Max attempts before discarding operation
 
       for (final op in operations) {
         try {
@@ -279,11 +296,21 @@ class OfflineSyncService {
             await _syncLogDao.removeOperation(op.id);
             successCount++;
           } else {
+            // Mark as attempted, but remove if too many retries
             await _syncLogDao.markAttempted(op.id, 'Operation failed');
+            if ((op.attempts + 1) >= maxRetries) {
+              // Too many failures; discard to prevent infinite loops
+              print('⚠️ Sync: Discarding operation ${op.id} after ${op.attempts + 1} attempts');
+              await _syncLogDao.removeOperation(op.id);
+            }
             failCount++;
           }
         } catch (e) {
           await _syncLogDao.markAttempted(op.id, 'Exception: $e');
+          if ((op.attempts + 1) >= maxRetries) {
+            print('⚠️ Sync: Discarding operation ${op.id} after ${op.attempts + 1} attempts (exception)');
+            await _syncLogDao.removeOperation(op.id);
+          }
           failCount++;
         }
       }
@@ -359,7 +386,7 @@ class OfflineSyncService {
       name: data['name'] as String? ?? item.name,
       type: data['type'] as String? ?? item.type,
       description: data['description'] as String? ?? item.description,
-      imageUrl: data['imageUrl'] as String?,
+      imageUrl: _toRemoteImageUrl(data['imageUrl'] as String?),
       clientRequestId: requestId,
     );
 
@@ -407,11 +434,12 @@ class OfflineSyncService {
       name: data['name'] as String? ?? item.name,
       type: data['type'] as String? ?? item.type,
       description: data['description'] as String? ?? item.description,
-      imageUrl: data['imageUrl'] as String? ?? item.imageUrl,
+      imageUrl: _toRemoteImageUrl(data['imageUrl'] as String?) ??
+          _toRemoteImageUrl(item.imageUrl),
       version: item.version,
     );
 
-    int newLocalVersion = (item.version ?? 1) + 1;
+    int newLocalVersion = item.version + 1;
     if (!okItem) {
       // Recover from optimistic-lock conflicts (409): fetch current server version
       // and retry the same update once with that version.
@@ -424,20 +452,31 @@ class OfflineSyncService {
         name: data['name'] as String? ?? item.name,
         type: data['type'] as String? ?? item.type,
         description: data['description'] as String? ?? item.description,
-        imageUrl: data['imageUrl'] as String? ?? item.imageUrl,
+        imageUrl: _toRemoteImageUrl(data['imageUrl'] as String?) ??
+            _toRemoteImageUrl(item.imageUrl),
         version: serverVersion,
       );
 
-      if (!retryOk) return false;
+      if (!retryOk) {
+        // Even the retry failed; log it and fail the operation
+        print('❌ Sync: Item update retry failed for item ${item.serverId} (server v$serverVersion)');
+        return false;
+      }
+      // Successful retry! Use server version + 1 as new local version
       newLocalVersion = serverVersion + 1;
     }
 
     final chapters = (data['chapters'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     if (chapters.isNotEmpty) {
       final okChapters = await _api.updateChapters(item.serverId!, chapters);
-      if (!okChapters) return false;
+      if (!okChapters) {
+        print('⚠️ Sync: Item ${item.serverId} chapters update failed, but item already synced');
+        // Don't fail entirely - item was updated successfully, just chapters failed
+        // (chapters will be retried in next sync)
+      }
     }
 
+    // Mark item as synced with new version
     await _itemsDao.upsertItem(
       ItemsCompanion(
         id: Value(item.id),

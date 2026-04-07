@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 import 'auth_service.dart';
 import '../models/literature_item.dart';
 import '../models/chapter.dart';
@@ -8,6 +11,7 @@ import '../models/comment.dart';
 import '../models/user_profile.dart';
 import '../utils/constants.dart';
 import 'image_cache/image_cache_service.dart';
+import 'package:mime/mime.dart';
 
 /// Custom exception to distinguish between network errors and server errors
 class ApiException implements Exception {
@@ -334,6 +338,68 @@ class ApiService {
           : '${ApiConstants.baseUrl}/$imageUrl';
       return await cacheImageForPlatform(fullUrl, fileName);
     } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> uploadImageFile({
+    required XFile file,
+    int? itemId,
+  }) async {
+    final bytes = await file.readAsBytes();
+    return uploadImageBytes(
+      bytes: bytes,
+      fileName: file.name,
+      itemId: itemId,
+    );
+  }
+
+  Future<String?> uploadImageBytes({
+    required Uint8List bytes,
+    required String fileName,
+    int? itemId,
+  }) async {
+    try {
+      final token = await _authService.getToken();
+      final endpoint = itemId == null
+          ? '${ApiConstants.baseUrl}/uploads/images'
+          : '${ApiConstants.baseUrl}/items/$itemId/image';
+
+      final request = http.MultipartRequest('POST', Uri.parse(endpoint));
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      final detectedMime = lookupMimeType(
+        fileName,
+        headerBytes: bytes,
+      );
+      final normalizedMime = (detectedMime != null && detectedMime.startsWith('image/'))
+          ? detectedMime
+          : 'image/jpeg';
+      final contentType = MediaType.parse(normalizedMime);
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'image',
+          bytes,
+          filename: fileName,
+          contentType: contentType,
+        ),
+      );
+
+      final streamed = await request.send().timeout(const Duration(seconds: 25));
+      final response = await http.Response.fromStream(streamed);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['imagePath'] as String?;
+      }
+
+      print('❌ API: uploadImage failed - ${response.statusCode}: ${response.body}');
+      return null;
+    } catch (e) {
+      print('❌ API: uploadImage exception: $e');
       return null;
     }
   }

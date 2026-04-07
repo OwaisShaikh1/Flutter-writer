@@ -4,7 +4,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/literature_item.dart';
 import '../providers/literature_provider.dart';
 import '../pages/introduction_page.dart';
-import '../pages/author_profile_page.dart';
 import '../utils/constants.dart';
 import '../theme/app_theme.dart';
 import '../providers/theme_provider.dart';
@@ -295,9 +294,28 @@ class _LiteratureCard extends StatelessWidget {
     }
     // Check for network image
     if (item.imageUrl != null && item.imageUrl!.isNotEmpty) {
-      final imageUrl = item.imageUrl!.startsWith('http')
-          ? item.imageUrl!
-          : '${ApiConstants.baseUrl}/${item.imageUrl}';
+      final raw = item.imageUrl!;
+      final isDirectUrl =
+          raw.startsWith('http') ||
+          raw.startsWith('blob:') ||
+          raw.startsWith('data:') ||
+          raw.startsWith('file:');
+      final imageUrl = isDirectUrl ? raw : '${ApiConstants.baseUrl}/$raw';
+
+      if (raw.startsWith('blob:') || raw.startsWith('file:') || raw.startsWith('data:')) {
+        return Image.network(
+          imageUrl,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          errorBuilder: (ctx, error, stack) => _buildPlaceholder(ctx),
+          loadingBuilder: (ctx, child, progress) {
+            if (progress == null) return child;
+            return _buildPlaceholder(ctx);
+          },
+        );
+      }
+
       return CachedNetworkImage(
         imageUrl: imageUrl,
         width: width,

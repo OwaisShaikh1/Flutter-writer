@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../models/literature_item.dart';
 import '../models/comment.dart';
 import '../providers/literature_provider.dart';
-import '../providers/sync_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/constants.dart';
+import '../widgets/platform_image/platform_local_image.dart';
 import 'chapter_reader_page.dart';
 import 'author_profile_page.dart';
 
@@ -215,6 +218,62 @@ class _IntroductionPageState extends State<IntroductionPage> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  Widget _buildDetailImage() {
+    final itemId = literatureItem['id'];
+    final provider = Provider.of<LiteratureProvider>(context, listen: false);
+    final item = itemId is int ? provider.getItemById(itemId) : null;
+
+    final localWidget = buildLocalImageWidget(
+      item?.imageLocalPath,
+      width: double.infinity,
+      height: 300,
+      fit: BoxFit.cover,
+    );
+    if (localWidget != null) {
+      return localWidget;
+    }
+
+    final rawImage = (literatureItem['image'] ?? '').toString();
+    if (rawImage.isNotEmpty) {
+      final isDirect = rawImage.startsWith('http') ||
+          rawImage.startsWith('blob:') ||
+          rawImage.startsWith('file:') ||
+          rawImage.startsWith('data:');
+      final imageUrl = isDirect ? rawImage : '${ApiConstants.baseUrl}/$rawImage';
+
+      if (rawImage.startsWith('blob:') || rawImage.startsWith('file:') || rawImage.startsWith('data:')) {
+        return Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: 300,
+          errorBuilder: (_, __, ___) => _buildImagePlaceholder(),
+        );
+      }
+
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: 300,
+        placeholder: (_, __) => _buildImagePlaceholder(),
+        errorWidget: (_, __, ___) => _buildImagePlaceholder(),
+      );
+    }
+
+    return _buildImagePlaceholder();
+  }
+
+  Widget _buildImagePlaceholder() {
+    return Center(
+      child: Icon(
+        Icons.book,
+        size: 100,
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+      ),
+    );
+  }
+
   Color _getTypeColor(String type) {
     switch (type.toLowerCase()) {
       case 'drama': return AppColors.drama;
@@ -289,11 +348,24 @@ class _IntroductionPageState extends State<IntroductionPage> {
       if (itemId > 0) {
         final freshItem = await _apiService.fetchItem(itemId);
         if (freshItem != null && mounted) {
-          // Update the literature item with fresh data
+          // Keep legacy map keys expected by this page.
           setState(() {
             widget.literatureItem.clear();
-            widget.literatureItem.addAll(freshItem.toJson());
-            _likesCount = freshItem.likes ?? 0;
+            widget.literatureItem.addAll({
+              'id': freshItem.id,
+              'title': freshItem.title,
+              'author': freshItem.author,
+              'authorId': freshItem.authorId,
+              'type': freshItem.type,
+              'rating': freshItem.rating,
+              'chapters': freshItem.chapters,
+              'comments': freshItem.comments,
+              'likes': freshItem.likes,
+              'isLikedByUser': freshItem.isLikedByUser,
+              'image': freshItem.imageUrl,
+              'description': freshItem.description,
+            });
+            _likesCount = freshItem.likes;
           });
         }
       }
@@ -348,22 +420,13 @@ class _IntroductionPageState extends State<IntroductionPage> {
               height: 300,
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                image: literatureItem['image'] != null
-                    ? DecorationImage(
-                        image: NetworkImage(literatureItem['image']),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
               ),
-              child: literatureItem['image'] == null
-                  ? Center(
-                      child: Icon(
-                        Icons.book,
-                        size: 100,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
-                      ),
-                    )
-                  : null,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildDetailImage(),
+                ],
+              ),
             ),
 
             Padding(

@@ -116,7 +116,7 @@ class OfflineStatusIndicator extends StatelessWidget {
 
   void _triggerSync(context, SyncProvider syncProvider, LiteratureProvider literatureProvider) async {
     try {
-      final result = await syncProvider.forcSync();
+      final result = await syncProvider.forceSync();
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -207,7 +207,7 @@ class SyncStatusCard extends StatelessWidget {
 
   void _triggerManualSync(context, SyncProvider syncProvider) async {
     try {
-      final result = await syncProvider.forcSync();
+      final result = await syncProvider.forceSync() ;
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:provider/provider.dart';
 import '../providers/literature_provider.dart';
 import '../models/literature_item.dart';
-import '../models/chapter.dart';
+import '../services/api_service.dart';
+import '../utils/constants.dart';
+import '../widgets/platform_image/platform_local_image.dart';
 import 'create_literature_page.dart';
 import 'add_chapter_page.dart';
 
@@ -31,9 +39,15 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
   ];
   
   List<ChapterDraft> _chapters = [];
+  final ImagePicker _imagePicker = ImagePicker();
+  final ApiService _apiService = ApiService();
   bool _isLoading = true;
   bool _isSaving = false;
   bool _hasChanges = false;
+  String? _selectedImageUrl;
+  String? _selectedImageLocalPath;
+  bool _cropBeforeUpload = false;
+  bool _compressBeforeUpload = true;
 
   @override
   void initState() {
@@ -41,6 +55,8 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
     _titleController = TextEditingController(text: widget.item.title);
     _descriptionController = TextEditingController(text: widget.item.description);
     _selectedType = widget.item.type;
+    _selectedImageUrl = widget.item.imageUrl;
+    _selectedImageLocalPath = widget.item.imageLocalPath;
     
     // Add listeners to detect changes
     _titleController.addListener(_onFieldChanged);
@@ -190,6 +206,117 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
     });
   }
 
+  Future<void> _pickCoverImage() async {
+    final file = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 95,
+      maxWidth: 2000,
+    );
+
+    if (file == null) return;
+    await _processAndUploadSelectedImage(file);
+  }
+
+  String _buildUploadFileName(String originalName) {
+    final safe = originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    return 'cover_${DateTime.now().millisecondsSinceEpoch}_$safe';
+  }
+
+  Future<CroppedFile?> _cropImage(XFile source) async {
+    if (!_cropBeforeUpload) return null;
+
+    return ImageCropper().cropImage(
+      sourcePath: source.path,
+      aspectRatio: const CropAspectRatio(ratioX: 3, ratioY: 4),
+      compressQuality: 100,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Cover',
+          lockAspectRatio: true,
+          hideBottomControls: false,
+        ),
+        IOSUiSettings(
+          title: 'Crop Cover',
+          aspectRatioLockEnabled: true,
+        ),
+        WebUiSettings(
+          context: context,
+          presentStyle: WebPresentStyle.dialog,
+          size: const CropperSize(width: 520, height: 640),
+        ),
+      ],
+    );
+  }
+
+  Future<Uint8List> _compressIfEnabled(Uint8List input) async {
+    if (!_compressBeforeUpload) return input;
+    try {
+      final compressed = await FlutterImageCompress.compressWithList(
+        input,
+        minWidth: 1440,
+        minHeight: 1920,
+        quality: 80,
+        format: CompressFormat.jpeg,
+      );
+      return Uint8List.fromList(compressed);
+    } catch (_) {
+      return input;
+    }
+  }
+
+  Future<void> _processAndUploadSelectedImage(XFile original) async {
+    setState(() => _isSaving = true);
+    try {
+      final cropped = await _cropImage(original);
+      final sourcePath = cropped?.path ?? original.path;
+      final rawBytes = cropped != null
+          ? await cropped.readAsBytes()
+          : await original.readAsBytes();
+      final uploadBytes = await _compressIfEnabled(rawBytes);
+
+      final uploadedPath = await _apiService.uploadImageBytes(
+        bytes: uploadBytes,
+        fileName: _buildUploadFileName(original.name),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        if (uploadedPath != null && uploadedPath.isNotEmpty) {
+          _selectedImageUrl = uploadedPath;
+        } else {
+          _selectedImageUrl = kIsWeb ? sourcePath : null;
+        }
+        _selectedImageLocalPath = kIsWeb ? null : sourcePath;
+        _hasChanges = true;
+      });
+
+      if (uploadedPath == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Image upload failed. Keeping local image only.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to process image: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _clearCoverImage() {
+    setState(() {
+      _selectedImageUrl = null;
+      _selectedImageLocalPath = null;
+      _hasChanges = true;
+    });
+  }
+
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
     
@@ -215,6 +342,8 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
         type: _selectedType,
         description: _descriptionController.text.trim(),
         chapters: _chapters,
+        imageUrl: _selectedImageUrl,
+        imageLocalPath: _selectedImageLocalPath,
       );
 
       if (mounted) {
@@ -374,6 +503,11 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
                       _buildTypeSelector(),
                       const SizedBox(height: 24),
 
+                      _buildSectionHeader(context, 'Cover image'),
+                      const SizedBox(height: 12),
+                      _buildCoverImagePicker(),
+                      const SizedBox(height: 24),
+
                       // Description Field
                       TextFormField(
                         controller: _descriptionController,
@@ -507,6 +641,106 @@ class _EditLiteraturePageState extends State<EditLiteraturePage> {
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildCoverImagePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AspectRatio(
+          aspectRatio: 3 / 4,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _buildCoverPreview(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _pickCoverImage,
+              icon: const Icon(Icons.photo_library_outlined),
+              label: Text(_selectedImageLocalPath != null || _selectedImageUrl != null
+                  ? 'Change Image'
+                  : 'Upload Image'),
+            ),
+            if (_selectedImageLocalPath != null || _selectedImageUrl != null) ...[
+              const SizedBox(width: 12),
+              TextButton.icon(
+                onPressed: _clearCoverImage,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Remove'),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          children: [
+            FilterChip(
+              label: const Text('Crop before upload'),
+              selected: _cropBeforeUpload,
+              onSelected: (v) => setState(() => _cropBeforeUpload = v),
+            ),
+            FilterChip(
+              label: const Text('Compress before upload'),
+              selected: _compressBeforeUpload,
+              onSelected: (v) => setState(() => _compressBeforeUpload = v),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCoverPreview() {
+    final localImage = buildLocalImageWidget(
+      _selectedImageLocalPath,
+      fit: BoxFit.cover,
+    );
+    if (localImage != null) {
+      return localImage;
+    }
+
+    final imageUrl = _selectedImageUrl;
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      if (imageUrl.startsWith('blob:') ||
+          imageUrl.startsWith('file:') ||
+          imageUrl.startsWith('data:')) {
+        return Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildCoverPlaceholder(),
+        );
+      }
+
+      final fullUrl = imageUrl.startsWith('http')
+          ? imageUrl
+          : '${ApiConstants.baseUrl}/$imageUrl';
+      return CachedNetworkImage(
+        imageUrl: fullUrl,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => _buildCoverPlaceholder(),
+        errorWidget: (_, __, ___) => _buildCoverPlaceholder(),
+      );
+    }
+
+    return _buildCoverPlaceholder();
+  }
+
+  Widget _buildCoverPlaceholder() {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.35),
+      child: Center(
+        child: Icon(
+          Icons.image_outlined,
+          size: 48,
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+        ),
       ),
     );
   }

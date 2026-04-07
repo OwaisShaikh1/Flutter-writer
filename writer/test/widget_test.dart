@@ -9,14 +9,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:writer/main.dart';
 import 'package:writer/database/database.dart';
+import 'package:writer/services/offline_sync_service.dart';
 
 void main() {
   testWidgets('Literature Dashboard smoke test', (WidgetTester tester) async {
     // Initialize database for testing
     final database = AppDatabase();
+    final offlineSyncService = OfflineSyncService(database);
     
     // Build our app and trigger a frame.
-    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpWidget(
+      MyApp(database: database, offlineSyncService: offlineSyncService),
+    );
 
     // Wait for the app to load
     await tester.pump();

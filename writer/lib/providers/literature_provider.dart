@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:drift/drift.dart';
 import '../database/database.dart';
 import '../database/dao/items_dao.dart';
 import '../database/dao/chapters_dao.dart';
 import '../services/sync_service.dart' as sync;
 import '../services/offline_sync_service.dart' as offline;
+import '../services/novel_export/novel_export_service.dart';
 import '../services/storage_service.dart';
 import '../models/literature_item.dart';
 import '../models/chapter.dart';
@@ -22,6 +22,7 @@ class LiteratureProvider with ChangeNotifier {
   late final ChaptersDao _chaptersDao;
   late final sync.SyncService _syncService;
   late final offline.OfflineSyncService _offlineSyncService;
+  final NovelExportService _novelExportService = createNovelExportService();
   final StorageService _storageService = StorageService();
 
   List<LiteratureItem> _items = [];
@@ -156,11 +157,21 @@ class LiteratureProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // First try to pull latest items from server
-      final pullResult = await _syncService.pullItems();
-      
-      // Then process pending offline operations
+      // Process pending local operations first so local writes are not
+      // overwritten by older server snapshots during pull.
       final queueResult = await _offlineSyncService.processSyncQueue();
+      final pendingAfterQueue = await _offlineSyncService.getPendingCount();
+
+      sync.SyncResult pullResult;
+      if (!queueResult.success && pendingAfterQueue > 0) {
+        pullResult = sync.SyncResult(
+          success: false,
+          message: 'Skipped pull because local changes are still pending',
+          itemCount: 0,
+        );
+      } else {
+        pullResult = await _syncService.pullItems();
+      }
       
       if (pullResult.success || queueResult.success) {
         _lastSyncTime = DateTime.now();
@@ -179,9 +190,13 @@ class LiteratureProvider with ChangeNotifier {
       _isSyncing = false;
       notifyListeners();
 
-      final syncedOk = pullResult.success && queueResult.success;
+      final syncedOk =
+          pullResult.success && queueResult.success && pendingAfterQueue == 0;
       if (!syncedOk) {
-        print('❌ SYNC: Pull=${pullResult.message} | Queue=${queueResult.message}');
+        print(
+          '❌ SYNC: Pull=${pullResult.message} | '
+          'Queue=${queueResult.message} | Pending=$pendingAfterQueue',
+        );
       }
       return offline.SyncResult(
         success: syncedOk,
@@ -239,6 +254,7 @@ class LiteratureProvider with ChangeNotifier {
     required String description,
     required List<ChapterDraft> chapters,
     String? imageUrl,
+    String? imageLocalPath,
   }) async {
     _currentUserId = await _storageService.getUserId();
     if (_currentUserId == null) {
@@ -260,6 +276,7 @@ class LiteratureProvider with ChangeNotifier {
         description: description,
         chapters: chapterData,
         imageUrl: imageUrl,
+        imageLocalPath: imageLocalPath,
       );
 
       if (localId != null) {
@@ -291,6 +308,7 @@ class LiteratureProvider with ChangeNotifier {
     required String description,
     required List<ChapterDraft> chapters,
     String? imageUrl,
+    String? imageLocalPath,
   }) async {
     try {
       final chapterData = chapters.map((c) => {
@@ -307,6 +325,7 @@ class LiteratureProvider with ChangeNotifier {
         description: description,
         chapters: chapterData,
         imageUrl: imageUrl,
+        imageLocalPath: imageLocalPath,
       );
 
       if (success) {
@@ -407,6 +426,44 @@ class LiteratureProvider with ChangeNotifier {
       notifyListeners();
       return [];
     }
+  }
+
+  /// Export a whole novel as a local styled text document.
+  /// Uses local database chapters only, so it works fully offline.
+  /// Export is restricted to the author of the item.
+  Future<NovelExportResult> exportNovelDocument(int itemId) async {
+    _currentUserId ??= await _storageService.getUserId();
+    if (_currentUserId == null) {
+      return const NovelExportResult(
+        success: false,
+        message: 'User not logged in.',
+      );
+    }
+
+    final item = getItemById(itemId);
+    if (item == null) {
+      return const NovelExportResult(
+        success: false,
+        message: 'Item not found locally.',
+      );
+    }
+
+    if (item.authorId == null || item.authorId != _currentUserId) {
+      return const NovelExportResult(
+        success: false,
+        message: 'Only the author can export this novel offline.',
+      );
+    }
+
+    final chapters = await getChaptersForItem(itemId);
+    if (chapters.isEmpty) {
+      return const NovelExportResult(
+        success: false,
+        message: 'No local chapters found to export.',
+      );
+    }
+
+    return _novelExportService.exportNovel(item: item, chapters: chapters);
   }
 
   /// Check if current user owns an item

@@ -21,6 +21,13 @@ class SyncService {
     _chaptersDao = ChaptersDao(_db);
   }
 
+  /// Convert local SQLite item id to backend item id when available.
+  /// Falls back to [localItemId] for legacy rows where id == server id.
+  Future<int> _resolveRemoteItemId(int localItemId) async {
+    final serverId = await _itemsDao.getServerId(localItemId);
+    return serverId ?? localItemId;
+  }
+
   // ==================== CONNECTIVITY ====================
   
   Future<bool> isOnline() async {
@@ -51,8 +58,66 @@ class SyncService {
       final items = await _api.fetchItems();
 
       for (final item in items) {
+        final existingByServerId = await _itemsDao.getItemByServerId(item.id);
+        ItemEntity? localItem = existingByServerId;
+
+        // Legacy fallback: Older synced rows may have server id stored in local id.
+        if (localItem == null) {
+          final legacyById = await _itemsDao.getItemById(item.id);
+          if (legacyById != null &&
+              (legacyById.serverId == item.id ||
+                  (legacyById.serverId == null && legacyById.isSynced))) {
+            localItem = legacyById;
+          }
+        }
+
+        final serverUpdatedAt = item.updatedAt;
+        final bool localNewerThanServer = localItem != null &&
+            serverUpdatedAt != null &&
+            localItem.updatedAt.isAfter(serverUpdatedAt);
+        final bool localVersionAhead =
+            localItem != null && localItem.version > item.version;
+        final bool localHasPendingChanges =
+            localItem != null && (localItem.hasChanged || !localItem.isSynced);
+
+        // Never let stale/older server data overwrite local pending edits.
+        if (localHasPendingChanges || localVersionAhead || localNewerThanServer) {
+          print(
+            '⏭️ SYNC: Skipping server overwrite for item ${item.id} '
+            '(local pending/newer data exists)',
+          );
+          continue;
+        }
+
+        if (localItem != null) {
+          await _itemsDao.upsertItem(ItemsCompanion(
+            id: Value(localItem.id),
+            serverId: Value(item.id),
+            name: Value(item.title),
+            author: Value(item.author),
+            authorId:
+                item.authorId != null ? Value(item.authorId!) : const Value.absent(),
+            type: Value(item.type),
+            rating: Value(item.rating),
+            chaptersCount: Value(item.chapters),
+            commentsCount: Value(item.comments),
+            likesCount: Value(item.likes),
+            isLikedByUser: Value(item.isLikedByUser),
+            imageUrl: Value(item.imageUrl),
+            imageLocalPath: Value(localItem.imageLocalPath),
+            description: Value(item.description),
+            isFavorite: Value(localItem.isFavorite),
+            isSynced: const Value(true),
+            hasChanged: const Value(false),
+            lastSyncedAt: Value(DateTime.now()),
+            updatedAt:
+                serverUpdatedAt != null ? Value(serverUpdatedAt) : const Value.absent(),
+            version: Value(item.version),
+          ));
+          continue;
+        }
+
         await _itemsDao.upsertItem(ItemsCompanion(
-          id: Value(item.id),
           serverId: Value(item.id),
           name: Value(item.title),
           author: Value(item.author),
@@ -66,7 +131,10 @@ class SyncService {
           imageUrl: Value(item.imageUrl),
           description: Value(item.description),
           isSynced: const Value(true),
+          hasChanged: const Value(false),
           lastSyncedAt: Value(DateTime.now()),
+          updatedAt:
+              serverUpdatedAt != null ? Value(serverUpdatedAt) : const Value.absent(),
           version: Value(item.version),
         ));
       }
@@ -93,8 +161,9 @@ class SyncService {
         return SyncResult(success: false, message: 'No internet connection');
       }
 
-      print('📥 SYNC: Pulling chapters for item $itemId...');
-      final chapters = await _api.fetchChapters(itemId);
+      final remoteItemId = await _resolveRemoteItemId(itemId);
+      print('📥 SYNC: Pulling chapters for item $itemId (remote: $remoteItemId)...');
+      final chapters = await _api.fetchChapters(remoteItemId);
       
       // Get existing local chapters to find ones that should be deleted
       final localChapters = await _chaptersDao.getChaptersByItemId(itemId);
@@ -141,8 +210,12 @@ class SyncService {
     try {
       if (!await isOnline()) return false;
       
-      print('📥 SYNC: Downloading chapter $chapterNumber for item $itemId...');
-      final chapter = await _api.fetchChapter(itemId, chapterNumber);
+      final remoteItemId = await _resolveRemoteItemId(itemId);
+      print(
+        '📥 SYNC: Downloading chapter $chapterNumber for item '
+        '$itemId (remote: $remoteItemId)...',
+      );
+      final chapter = await _api.fetchChapter(remoteItemId, chapterNumber);
       if (chapter == null) return false;
 
       await _chaptersDao.upsertChapter(ChaptersCompanion(
